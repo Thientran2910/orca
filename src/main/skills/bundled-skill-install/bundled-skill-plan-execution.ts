@@ -18,7 +18,9 @@ import { classifyBundledSkillPath } from './bundled-skill-classification'
 import { filesystemErrorCode } from './bundled-skill-filesystem-error'
 import { buildBundledSkillPlan, type BundledSkillPlanInput } from './bundled-skill-plan'
 import {
+  BundledSkillBackupRefusedError,
   BundledSkillChangedError,
+  BundledSkillReplaceRestoreError,
   backUpBundledSkillPath,
   bundledSkillBackupPath,
   putBundledSkillFolder,
@@ -72,16 +74,16 @@ async function settleCleanup(run: SkillRun, cleanup: BundledSkillCleanup) {
   await requireUnchanged(run, cleanup.path, cleanup.observed)
   await (cleanup.action === 'delete'
     ? removeBundledSkillSibling(run.input.filesystem, cleanup.path)
-    : backUpBundledSkillPath(run.input.filesystem, cleanup.path, backupFor(run)))
+    : backUpBundledSkillPath(run.input.filesystem, cleanup.path, backupFor(run), 'leftover'))
 }
 
 /** The moved-aside copy held edits that could not be backed up; they stay at `path`. */
 class BundledSkillStrandedError extends Error {
   constructor(
     readonly path: string,
-    readonly code: string
+    cause: unknown
   ) {
-    super(`bundled-skill-stranded: ${path}`)
+    super(`bundled-skill-stranded: ${path}`, { cause })
   }
 }
 
@@ -99,9 +101,9 @@ async function settleOldCopy(run: SkillRun, old: string) {
       await removeBundledSkillSibling(run.input.filesystem, old).catch(() => undefined)
       return undefined
     }
-    return await backUpBundledSkillPath(run.input.filesystem, old, backupFor(run))
+    return await backUpBundledSkillPath(run.input.filesystem, old, backupFor(run), 'moved-aside')
   } catch (error) {
-    throw new BundledSkillStrandedError(old, filesystemErrorCode(error))
+    throw new BundledSkillStrandedError(old, error)
   }
 }
 
@@ -117,7 +119,14 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
   const files = [{ path: 'SKILL.md', text: run.source.text }]
   const verify = verifier(run, op.path, op.observed)
   for (const cleanup of op.cleanup) {
-    await settleCleanup(run, cleanup)
+    if (cleanup.action === 'backup') {
+      await settleCleanup(run, cleanup)
+    }
+  }
+  for (const cleanup of op.cleanup) {
+    if (cleanup.action === 'delete') {
+      await settleCleanup(run, cleanup)
+    }
   }
   switch (op.kind) {
     case 'keep':
@@ -170,23 +179,63 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
   }
 }
 
-async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<string | undefined> {
-  let backup = await applyContent(run, op)
-  for (const previous of op.previous ?? []) {
-    if (previous.retain) {
-      await requireUnchanged(run, previous.path, previous.observed)
-      continue
+async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<BundledSkillOpOutcome> {
+  const { path, kind, reason } = op
+  let backupPath: string | undefined
+  let contentApplied = false
+  try {
+    backupPath = await applyContent(run, op)
+    contentApplied = true
+    for (const previous of op.previous ?? []) {
+      if (previous.retain) {
+        await requireUnchanged(run, previous.path, previous.observed)
+        continue
+      }
+      const retiredBackup = await retireBundledSkillPlacement(
+        run.input.filesystem,
+        previous.path,
+        previous.forward ? op.path : undefined,
+        (path) => verifier(run, path, previous.observed)(),
+        backupFor(run)
+      )
+      backupPath ??= retiredBackup
     }
-    const retiredBackup = await retireBundledSkillPlacement(
-      run.input.filesystem,
-      previous.path,
-      previous.forward ? op.path : undefined,
-      (path) => verifier(run, path, previous.observed)(),
-      backupFor(run)
-    )
-    backup ??= retiredBackup
+    return {
+      path,
+      kind,
+      status: 'done',
+      ...(reason && { reason }),
+      ...(backupPath && { backupPath })
+    }
+  } catch (error) {
+    const strandedPath = error instanceof BundledSkillStrandedError ? error.path : undefined
+    const failure =
+      error instanceof BundledSkillStrandedError || error instanceof BundledSkillReplaceRestoreError
+        ? error.cause
+        : error
+    if (error instanceof BundledSkillReplaceRestoreError) {
+      backupPath = error.backupPath
+    }
+    const partial = {
+      path,
+      kind,
+      ...((contentApplied || strandedPath) && { contentApplied: true as const }),
+      ...(strandedPath && { strandedPath }),
+      ...(backupPath && { backupPath })
+    }
+    if (failure instanceof BundledSkillChangedError) {
+      return { ...partial, status: 'changed' }
+    }
+    if (failure instanceof BundledSkillBackupRefusedError) {
+      return {
+        ...partial,
+        status: 'failed',
+        error: 'EXDEV',
+        backupRefusal: failure.refusal
+      }
+    }
+    return { ...partial, status: 'failed', error: filesystemErrorCode(failure) }
   }
-  return backup
 }
 
 /** Applies one skill's ops in order, then records its marker if this build's bytes are on disk. */
@@ -197,34 +246,8 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
     const outcome: BundledSkillOpOutcome =
       op.requires && statuses.get(op.requires) !== 'done'
         ? { path: op.path, kind: op.kind, status: 'skipped' }
-        : await applyOp(run, op).then(
-            (backupPath) => ({
-              path: op.path,
-              kind: op.kind,
-              status: 'done' as const,
-              ...(op.reason ? { reason: op.reason } : {}),
-              ...(backupPath ? { backupPath } : {})
-            }),
-            (error: unknown): BundledSkillOpOutcome =>
-              error instanceof BundledSkillStrandedError
-                ? {
-                    path: op.path,
-                    kind: op.kind,
-                    status: 'failed',
-                    error: error.code,
-                    strandedPath: error.path
-                  }
-                : error instanceof BundledSkillChangedError
-                  ? { path: op.path, kind: op.kind, status: 'changed' as const }
-                  : {
-                      path: op.path,
-                      kind: op.kind,
-                      status: 'failed' as const,
-                      error: filesystemErrorCode(error)
-                    }
-          )
-    // A stranded old copy still means the new copy is in place for dependent links.
-    statuses.set(op.path, outcome.strandedPath ? 'done' : outcome.status)
+        : await applyOp(run, op)
+    statuses.set(op.path, outcome.contentApplied ? 'done' : outcome.status)
     ops.push(outcome)
   }
   if (

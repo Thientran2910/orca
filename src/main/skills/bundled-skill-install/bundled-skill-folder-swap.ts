@@ -5,7 +5,9 @@ export const BUNDLED_SKILL_OLD_MARKER = '.orca-old-'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 
+import type { BundledSkillBackupRefusal } from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
+import { filesystemErrorCode } from './bundled-skill-filesystem-error'
 
 export type BundledSkillFile = { path: string; text: string }
 
@@ -13,6 +15,21 @@ export type BundledSkillFile = { path: string; text: string }
 export class BundledSkillChangedError extends Error {
   constructor(path: string) {
     super(`bundled-skill-changed: ${path}`)
+  }
+}
+
+export class BundledSkillBackupRefusedError extends Error {
+  constructor(readonly refusal: BundledSkillBackupRefusal) {
+    super(`Cross-drive skill backup refused: ${refusal.path}`)
+  }
+}
+
+export class BundledSkillReplaceRestoreError extends Error {
+  constructor(
+    readonly backupPath: string,
+    cause: unknown
+  ) {
+    super(`Skill replacement failed; original preserved at ${backupPath}`, { cause })
   }
 }
 
@@ -50,7 +67,7 @@ export async function retireBundledSkillPlacement(
     throw error
   }
   if (!(await verify(old))) {
-    return backUpBundledSkillPath(filesystem, old, backupPath)
+    return backUpBundledSkillPath(filesystem, old, backupPath, 'moved-aside')
   }
   await removeBundledSkillSibling(filesystem, old)
   return undefined
@@ -158,7 +175,7 @@ export async function replaceBundledSkillPath(
   try {
     await filesystem.ensureDirectory(dirname(backupPath))
     await requireUnchanged(verify, target)
-    await filesystem.moveToBackup(target, backupPath)
+    await renameToBackup(filesystem, target, backupPath, 'in-place')
   } catch (error) {
     await dropStaged()
     throw error
@@ -166,18 +183,43 @@ export async function replaceBundledSkillPath(
   try {
     await placeNew()
   } catch (error) {
-    await filesystem.moveToBackup(backupPath, target).catch(() => undefined)
     await dropStaged()
+    try {
+      if ((await filesystem.stat(target))?.kind !== 'missing') {
+        throw new BundledSkillChangedError(target)
+      }
+      await filesystem.rename(backupPath, target)
+    } catch {
+      throw new BundledSkillReplaceRestoreError(backupPath, error)
+    }
     throw error
   }
+}
+
+async function renameToBackup(
+  filesystem: BundledSkillFilesystem,
+  path: string,
+  backupPath: string,
+  source: BundledSkillBackupRefusal['source']
+): Promise<void> {
+  try {
+    await filesystem.rename(path, backupPath)
+  } catch (error) {
+    if (filesystemErrorCode(error) === 'EXDEV') {
+      throw new BundledSkillBackupRefusedError({ path, source })
+    }
+    throw error
+  }
+  await filesystem.privatizeBackup(backupPath)
 }
 
 export async function backUpBundledSkillPath(
   filesystem: BundledSkillFilesystem,
   path: string,
-  backupPath: string
+  backupPath: string,
+  source: 'leftover' | 'moved-aside'
 ): Promise<string> {
   await filesystem.ensureDirectory(dirname(backupPath))
-  await filesystem.moveToBackup(path, backupPath)
+  await renameToBackup(filesystem, path, backupPath, source)
   return backupPath
 }

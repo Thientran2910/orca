@@ -114,6 +114,11 @@ export type BundledSkillPlan = {
   planDigest: string
 }
 
+export type BundledSkillBackupRefusal = {
+  path: string
+  source: 'in-place' | 'leftover' | 'moved-aside'
+}
+
 export type BundledSkillOpOutcome = {
   path: string
   kind: BundledSkillOpKind
@@ -124,6 +129,10 @@ export type BundledSkillOpOutcome = {
   backupPath?: string
   /** The new copy is in, but edits saved during the swap could not be backed up and remain here. */
   strandedPath?: string
+  /** The primary operation completed before a later check or backup failed. */
+  contentApplied?: true
+  /** The refused cross-drive backup's source, including copies moved aside before the attempt. */
+  backupRefusal?: BundledSkillBackupRefusal
 }
 
 export type BundledSkillOutcome = {
