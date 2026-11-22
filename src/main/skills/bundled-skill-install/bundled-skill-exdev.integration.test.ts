@@ -17,6 +17,7 @@ const volume = process.env.ORCA_EXDEV_VOLUME
 describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
   afterEach(removeSkillHomes)
 
+  // Opt-in real-disk run: writing 400 files and the consent hash dominate under load.
   it('leaves all bytes in place and does no backup work after the rejected rename', async () => {
     const home = await makeSkillHome()
     const project = await mkdtemp(join(volume!, 'orca-exdev-'))
@@ -33,7 +34,12 @@ describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
       const input = serviceInput(home, { agents: [], force: [skill], workspaceDirectory: project })
       const plan = await previewBundledSkillInstall(input)
       let refusedAt: number | undefined
-      let hashesAfterRefusal = 0
+      let treeReadsAfterRefusal = 0
+      const countRefusedTreeRead = (path: string) => {
+        if (refusedAt !== undefined && path.startsWith(skill)) {
+          treeReadsAfterRefusal += 1
+        }
+      }
       const started = performance.now()
       const result = await installBundledSkills(
         {
@@ -51,10 +57,16 @@ describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
               }
             },
             hashFile: async (path) => {
-              if (refusedAt !== undefined) {
-                hashesAfterRefusal += 1
-              }
+              countRefusedTreeRead(path)
               return nativeBundledSkillFilesystem.hashFile!(path)
+            },
+            readFile: async (path, maxBytes) => {
+              countRefusedTreeRead(path)
+              return nativeBundledSkillFilesystem.readFile(path, maxBytes)
+            },
+            listEntries: async (directory) => {
+              countRefusedTreeRead(directory)
+              return nativeBundledSkillFilesystem.listEntries(directory)
             }
           }
         },
@@ -69,7 +81,8 @@ describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
         backupRefusal: { path: skill, source: 'in-place' }
       })
       expect(refusedAt).toBeDefined()
-      expect(hashesAfterRefusal).toBe(0)
+      expect(treeReadsAfterRefusal).toBe(0)
+      expect(finished - refusedAt!).toBeLessThan(2000)
       expect(await readdir(backups)).toEqual([])
       expect(await readdir(skills)).toEqual([NAME])
       expect(await readdir(skill)).toHaveLength(401)
@@ -81,5 +94,5 @@ describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
     } finally {
       await rm(project, { recursive: true, force: true })
     }
-  })
+  }, 120_000)
 })

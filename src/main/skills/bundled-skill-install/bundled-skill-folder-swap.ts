@@ -194,6 +194,8 @@ export async function replaceBundledSkillPath(
     }
     throw error
   }
+  // Only after placement, so a rolled-back original keeps its own mode.
+  await privatizeQuietly(filesystem, backupPath)
 }
 
 async function renameToBackup(
@@ -210,7 +212,11 @@ async function renameToBackup(
     }
     throw error
   }
-  await filesystem.privatizeBackup(backupPath)
+}
+
+/** The backups folder is already private, so a failed tightening must not strand a copy that moved. */
+async function privatizeQuietly(filesystem: BundledSkillFilesystem, backupPath: string) {
+  await filesystem.privatizeBackup(backupPath).catch(() => undefined)
 }
 
 export async function backUpBundledSkillPath(
@@ -221,5 +227,6 @@ export async function backUpBundledSkillPath(
 ): Promise<string> {
   await filesystem.ensureDirectory(dirname(backupPath))
   await renameToBackup(filesystem, path, backupPath, source)
+  await privatizeQuietly(filesystem, backupPath)
   return backupPath
 }

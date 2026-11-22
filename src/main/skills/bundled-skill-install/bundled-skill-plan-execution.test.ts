@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bundledSkillNudgeEntries } from '../../../shared/skills/bundled/bundled-skill-summary'
@@ -180,6 +180,56 @@ describe('interrupted swaps', () => {
     expect(await readdir(home.shared)).toEqual([])
     expect(await leftoverSiblings(home.shared)).toEqual([])
   })
+  it('puts the original back with its own mode when Replace fails on a free target', async () => {
+    const home = await makeSkillHome()
+    const edited = OLD_TEXT + 'Local edit\n'
+    await writeCopy(home.shared, edited, { 'notes.md': 'user payload' })
+    const modeBefore = (await stat(home.shared)).mode
+    const filesystem: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      rename: async (source, target) => {
+        if (target === home.shared && source.includes('.orca-stage-')) {
+          throw Object.assign(new Error('placement failed'), { code: 'EIO' })
+        }
+        return nativeBundledSkillFilesystem.rename(source, target)
+      }
+    }
+    const input = serviceInput(home, { agents: [], force: [home.shared] })
+    const plan = await previewBundledSkillInstall(input)
+    const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    expect(result.skills[0].ops[0]).toEqual({
+      path: home.shared,
+      kind: 'replace',
+      status: 'failed',
+      error: 'EIO'
+    })
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(edited)
+    expect(await readFile(join(home.shared, 'notes.md'), 'utf8')).toBe('user payload')
+    expect((await stat(home.shared)).mode).toBe(modeBefore)
+    expect(await readdir(join(home.home, '.agents', '.orca-skill-backups'))).toEqual([])
+    expect(await leftoverSiblings(home.shared)).toEqual([])
+    expect((await previewBundledSkillInstall(input)).planDigest).toBe(plan.planDigest)
+  })
+
+  it('keeps a finished Replace when the backup cannot be made private', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, OLD_TEXT + 'Local edit\n')
+    const filesystem: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      privatizeBackup: async () => {
+        throw Object.assign(new Error('chmod failed'), { code: 'EPERM' })
+      }
+    }
+    const input = serviceInput(home, { agents: [], force: [home.shared] })
+    const plan = await previewBundledSkillInstall(input)
+    const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    const done = result.skills[0].ops[0]
+    expect(done.status).toBe('done')
+    expect(await readFile(join(done.backupPath ?? '', 'SKILL.md'), 'utf8')).toBe(
+      OLD_TEXT + 'Local edit\n'
+    )
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
+  })
 })
 
 describe('cross-drive backup refusal', () => {
@@ -195,7 +245,12 @@ describe('cross-drive backup refusal', () => {
       await writeCopy(target, edited, { 'notes.md': 'user payload' })
       const backups = join(home.home, '.agents', '.orca-skill-backups')
       let refused = false
-      let hashesAfterRefusal = 0
+      let treeReadsAfterRefusal = 0
+      const countRefusedTreeRead = (path: string) => {
+        if (refused && path.startsWith(target)) {
+          treeReadsAfterRefusal += 1
+        }
+      }
       const filesystem: BundledSkillFilesystem = {
         ...nativeBundledSkillFilesystem,
         rename: async (source, destination) => {
@@ -206,10 +261,16 @@ describe('cross-drive backup refusal', () => {
           return nativeBundledSkillFilesystem.rename(source, destination)
         },
         hashFile: async (path) => {
-          if (refused) {
-            hashesAfterRefusal += 1
-          }
+          countRefusedTreeRead(path)
           return nativeBundledSkillFilesystem.hashFile!(path)
+        },
+        readFile: async (path, maxBytes) => {
+          countRefusedTreeRead(path)
+          return nativeBundledSkillFilesystem.readFile(path, maxBytes)
+        },
+        listEntries: async (directory) => {
+          countRefusedTreeRead(directory)
+          return nativeBundledSkillFilesystem.listEntries(directory)
         }
       }
       const input = serviceInput(home, { agents: ['claude'], force: [target] })
@@ -228,7 +289,7 @@ describe('cross-drive backup refusal', () => {
         expect(result.skills[0].ops.find((op) => op.path === home.claude)?.status).toBe('skipped')
         expect(await snapshot(join(home.home, '.agents', '.orca-skill-digests'))).toBe('missing')
       }
-      expect(hashesAfterRefusal).toBe(0)
+      expect(treeReadsAfterRefusal).toBe(0)
       expect(await readFile(join(target, 'SKILL.md'), 'utf8')).toBe(edited)
       expect(await readFile(join(target, 'notes.md'), 'utf8')).toBe('user payload')
       expect(await readdir(backups)).toEqual([])
@@ -357,6 +418,8 @@ describe('cross-drive backup refusal', () => {
       expect(await readFile(join(oldPath, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT + 'Late edit\n')
       expect(await readdir(backups)).toEqual([])
       if (placement === 'former name') {
+        // The former placement now forwards to the new copy; recovery must still find the edit.
+        expect((await lstat(former)).isSymbolicLink()).toBe(true)
         expect(await readFile(join(former, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
       } else {
         expect(await snapshot(former)).toBe('missing')
