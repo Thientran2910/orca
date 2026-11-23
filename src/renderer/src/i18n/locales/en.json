@@ -7076,13 +7076,38 @@
           "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
           "preservedTitle": "Your edits to {{value0}} were saved separately",
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
-          "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
-          "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+          "uncertainTitleShort": "Couldn't confirm skill updates on {{value0}}",
+          "uncertainEditedCopies": "Edited copies are in the backup folder or next to their skill."
         },
         "SkillBackupPathLine": {
           "movedTo": "Old copy moved to:",
           "movedToOnHost": "Old copy moved to {{host}}:",
           "showFolder": "Show folder"
+        },
+        "skillBackupRefusal": {
+          "inPlaceReason": "Can't back it up: it's on another drive.",
+          "tryAgain": "Move it out of the skills folder, then try again.",
+          "leftoverReason": "Can't back up the left-over copy: it's on another drive.",
+          "movedAsideReason": "Couldn't back up the old copy: it's on another drive.",
+          "keepIt": "Move it out of the skills folder to keep it.",
+          "noReminder": "Move it out of the skills folder. Orca won't remind you.",
+          "updatedMovedAside": "Updated · Old copy moved aside",
+          "updatedOneKept": "Updated · 1 copy kept as is",
+          "updatedCopiesKept": "Updated · {{count}} copies kept as is",
+          "updatedLeftoverKept": "Updated · Left-over copy kept",
+          "keptAsIs": "Kept as is",
+          "keptOnAnotherDrive": "Kept as is · On another drive",
+          "upToDateMovedAside": "Up to date · Old copy moved aside",
+          "keptLeftoverKept": "Kept as is · Left-over copy kept",
+          "showInFolder": "Show in folder",
+          "dismiss": "Dismiss",
+          "toastReason": "Couldn't back it up: it's on another drive.",
+          "toastTitle": "{{value0}} updated · Old copy moved aside",
+          "toastTitleKept": "{{value0}} · Old copy moved aside",
+          "toastNoReminder": "Orca won't remind you.",
+          "toastGroupTitle": "{{count}} old copies moved aside",
+          "toastGroupReason": "Couldn't back them up: they're on another drive.",
+          "showDetails": "Show details"
         }
       },
       "sidebar": {
@@ -14385,7 +14410,8 @@
         },
         "BundledSkillInstallStatus": {
           "updateServer": "Update Orca on the server to install its skills.",
-          "connectHost": "Connect to this SSH host to install its skills."
+          "connectHost": "Connect to this SSH host to install its skills.",
+          "showMoreSkills": "Show {{count}} more"
         },
         "OrchestrationSkillPromptDialog": {
           "d3dc559225": "Failed to copy install command.",

@@ -1,4 +1,4 @@
-// Automatic-update toasts for a refused cross-drive backup (item 1126 S3–S5): local, remote, grouped.
+// Automatic-update toasts for a refused cross-drive backup (item 1126 S3–S5) and a lost reply.
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
@@ -8,7 +8,7 @@ import type {
   BundledSkillOpOutcome
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
-import { reportPreservedEdits } from './skill-freshness-auto-update'
+import { reportPreservedEdits, reportUncertainOutcome } from './skill-freshness-auto-update'
 
 const SKILLS = '/Users/sam/.agents/skills'
 
@@ -78,6 +78,28 @@ export const formerRootOnlyNotice = defineFixture({
   width: 480
 })
 
+export const keptMovedAside = defineFixture({
+  render: () => (
+    <Toasts
+      target={LOCAL}
+      run={result({
+        electron: {
+          path: `${SKILLS}/electron`,
+          kind: 'keep',
+          status: 'failed',
+          error: 'EXDEV',
+          currentConfirmed: true,
+          backupRefusal: {
+            path: `${SKILLS}/.orca-cli-orchestration-and-worktree-handoff.orca-old-5c09b7d2`,
+            source: 'moved-aside'
+          }
+        }
+      })}
+    />
+  ),
+  width: 480
+})
+
 export const remote = defineFixture({
   render: () => (
     <Toasts
@@ -101,4 +123,30 @@ export const grouped = defineFixture({
     />
   ),
   width: 480
+})
+
+/** A lost or timed-out automatic update reply (item 1126 C3 copy). */
+function UncertainToast({ target }: { target: BundledSkillTarget }): React.JSX.Element {
+  useEffect(() => {
+    reportUncertainOutcome(target, { homeDirectory: '/Users/sam' })
+    return () => {
+      toast.dismiss()
+    }
+  }, [target])
+  return (
+    <>
+      <div className="h-[200px]" />
+      <Toaster toastOptions={{ className: 'font-sans text-sm' }} />
+    </>
+  )
+}
+
+export const uncertainLocal = defineFixture({
+  render: () => <UncertainToast target={LOCAL} />,
+  width: 360
+})
+
+export const uncertainRemote = defineFixture({
+  render: () => <UncertainToast target={REMOTE} />,
+  width: 360
 })

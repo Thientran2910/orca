@@ -63,6 +63,7 @@ export function skillRefusalLines(
 }
 
 type RefusalSummary = {
+  name: string
   notices: BundledSkillRefusalNotice[]
   updated: boolean
   movedAside: boolean
@@ -75,6 +76,7 @@ function summarize(outcome: BundledSkillOutcome): RefusalSummary | null {
     return null
   }
   return {
+    name: outcome.name,
     notices,
     updated: bundledSkillOutcomeUpdatedSomething(outcome),
     movedAside: notices.some((notice) => notice.source === 'moved-aside'),
@@ -121,30 +123,82 @@ export function skillRefusalRowHeadline(
   return t('auto.components.skills.skillBackupRefusal.keptAsIs', 'Kept as is')
 }
 
-/** Settings result line: the short state, then each retained path on its own line. */
-export function skillRefusalSettingsLine(
+function settingsHeadline(summary: RefusalSummary, t: Translate): string {
+  if (summary.updated) {
+    return updatedHeadline(summary, t)
+  }
+  if (summary.keptInPlace > 0) {
+    return t(
+      'auto.components.skills.skillBackupRefusal.keptOnAnotherDrive',
+      'Kept as is · On another drive'
+    )
+  }
+  // A current copy was only rechecked, then a retired copy's backup was refused.
+  if (summary.movedAside) {
+    return t(
+      'auto.components.skills.skillBackupRefusal.upToDateMovedAside',
+      'Up to date · Old copy moved aside'
+    )
+  }
+  return t(
+    'auto.components.skills.skillBackupRefusal.keptLeftoverKept',
+    'Kept as is · Left-over copy kept'
+  )
+}
+
+/** One skill's Settings result: its short state, then each retained path on its own line. */
+export type SkillRefusalSettingsBlock = { headline: string; paths: string[] }
+
+/**
+ * Settings result after a refused backup. A batch with more than one skill to report gets a block
+ * per skill, refused skills first, so one skill's state never stands for another's. `otherSkill`
+ * gives a non-refused skill's state, or null when it has nothing to report. Null without a refusal.
+ */
+export function skillRefusalSettingsBlocks(
   result: BundledSkillInstallResult,
-  t: Translate = translate
-): string | null {
-  const summaries = result.skills.flatMap((outcome) => summarize(outcome) ?? [])
-  const summary =
-    summaries.find((candidate) => candidate.movedAside) ??
-    summaries.find((candidate) => candidate.keptInPlace > 0) ??
-    summaries[0]
-  if (!summary) {
+  t: Translate = translate,
+  otherSkill: (outcome: BundledSkillOutcome) => string | null = () => null
+): SkillRefusalSettingsBlock[] | null {
+  const refused = result.skills.flatMap((outcome) => summarize(outcome) ?? [])
+  if (refused.length === 0) {
     return null
   }
-  const headline = summary.updated
-    ? updatedHeadline(summary, t)
-    : summary.keptInPlace > 0
-      ? t(
-          'auto.components.skills.skillBackupRefusal.keptOnAnotherDrive',
-          'Kept as is · On another drive'
-        )
-      : t(
-          'auto.components.skills.skillBackupRefusal.keptLeftoverKept',
-          'Kept as is · Left-over copy kept'
-        )
-  const paths = summaries.flatMap((candidate) => candidate.notices.map((notice) => notice.path))
-  return [headline, ...paths].join('\n')
+  const others = result.skills.flatMap((outcome) => {
+    if (refused.some((summary) => summary.name === outcome.name)) {
+      return []
+    }
+    const headline = otherSkill(outcome)
+    return headline ? [{ headline: `${outcome.name}: ${headline}`, paths: [] }] : []
+  })
+  const blocks = refused.map((summary) => ({
+    headline: settingsHeadline(summary, t),
+    paths: summary.notices.map((notice) => notice.path)
+  }))
+  if (blocks.length === 1 && others.length === 0) {
+    return blocks
+  }
+  return [
+    ...blocks.map((block, index) => ({
+      ...block,
+      headline: `${refused[index].name}: ${block.headline}`
+    })),
+    ...others
+  ]
+}
+
+/** Plain-text form of the blocks; a batch indents each skill's paths under its state. */
+export function skillRefusalSettingsText(blocks: readonly SkillRefusalSettingsBlock[]): string {
+  const indent = blocks.length > 1 ? '  ' : ''
+  return blocks
+    .flatMap((block) => [block.headline, ...block.paths.map((path) => `${indent}${path}`)])
+    .join('\n')
+}
+
+export function skillRefusalSettingsLine(
+  result: BundledSkillInstallResult,
+  t: Translate = translate,
+  otherSkill?: (outcome: BundledSkillOutcome) => string | null
+): string | null {
+  const blocks = skillRefusalSettingsBlocks(result, t, otherSkill)
+  return blocks ? skillRefusalSettingsText(blocks) : null
 }

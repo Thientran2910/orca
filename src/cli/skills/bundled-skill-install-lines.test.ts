@@ -58,6 +58,47 @@ describe('orca skills CLI refusal lines', () => {
     ])
   })
 
+  it('says nothing about an update for a rechecked keep whose retirement was refused', () => {
+    const old = `${SKILLS}/.former-skill.orca-old-1`
+    expect(
+      describeOutcomeOpLines(
+        'orca',
+        {
+          path: `${SKILLS}/orca`,
+          kind: 'keep',
+          status: 'failed',
+          error: 'EXDEV',
+          currentConfirmed: true,
+          backupRefusal: { path: old, source: 'moved-aside' }
+        },
+        BACKUPS,
+        true
+      )
+    ).toEqual([
+      `  orca: Old copy moved aside to ${old}. Can't back it up to ${BACKUPS}: it's on another drive. Move it out of the skills folder to keep it.`
+    ])
+  })
+
+  it('names each location that got new content when the skill needs attention', () => {
+    const linked = {
+      path: '/home/u/.claude/skills/orca',
+      kind: 'link' as const,
+      status: 'done' as const
+    }
+    expect(describeOutcomeOpLines('orca', linked, BACKUPS, true)).toEqual([
+      '  /home/u/.claude/skills/orca: Linked.'
+    ])
+    expect(describeOutcomeOpLines('orca', linked, BACKUPS)).toEqual([])
+    expect(
+      describeOutcomeOpLines(
+        'orca',
+        { path: `${SKILLS}/orca`, kind: 'keep', status: 'done' },
+        BACKUPS,
+        true
+      )
+    ).toEqual([])
+  })
+
   it('keeps a generic EXDEV as a plain failure', () => {
     expect(
       describeOutcomeOpLines(

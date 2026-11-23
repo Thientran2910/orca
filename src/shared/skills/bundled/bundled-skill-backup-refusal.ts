@@ -14,7 +14,7 @@ export type BundledSkillRefusalNotice = {
   skill: string
   path: string
   source: BundledSkillBackupRefusal['source']
-  /** The op's own new copy or link landed before the refusal. */
+  /** The op published its own new copy or link before the refusal; a rechecked keep did not. */
   contentApplied: boolean
   /** Whether a later plan mentions this copy again; a former agent root's copy is not rediscovered. */
   offeredAgain: boolean
@@ -54,7 +54,12 @@ export function bundledSkillOpBackupPaths(op: BundledSkillOpOutcome): readonly s
   return op.backupPaths ?? (op.backupPath ? [op.backupPath] : [])
 }
 
-const WRITING_KINDS = new Set(['write', 'copy', 'link', 'update', 'replace'])
+const WRITING_KINDS: ReadonlySet<string> = new Set(['write', 'copy', 'link', 'update', 'replace'])
+
+/** Op kinds that put new content at their path; keep, leave and restore publish nothing new. */
+export function bundledSkillOpKindPublishes(kind: string): boolean {
+  return WRITING_KINDS.has(kind)
+}
 
 /**
  * Whether this run put new content anywhere for the skill, including an op that failed after its
@@ -62,6 +67,7 @@ const WRITING_KINDS = new Set(['write', 'copy', 'link', 'update', 'replace'])
  */
 export function bundledSkillOutcomeUpdatedSomething(outcome: BundledSkillOutcome): boolean {
   return outcome.ops.some(
-    (op) => WRITING_KINDS.has(op.kind) && (op.status === 'done' || op.contentApplied === true)
+    (op) =>
+      bundledSkillOpKindPublishes(op.kind) && (op.status === 'done' || op.contentApplied === true)
   )
 }

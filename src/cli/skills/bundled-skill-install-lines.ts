@@ -43,10 +43,21 @@ function describeRefusal(notice: BundledSkillRefusalNotice, backupFolder: string
   }
 }
 
-function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
+const PUBLISHED_TEXT: Partial<Record<BundledSkillOpOutcome['kind'], string>> = {
+  write: 'Installed.',
+  copy: 'Installed.',
+  link: 'Linked.',
+  update: 'Updated.',
+  replace: 'Updated.'
+}
+
+function describeOutcomeOp(op: BundledSkillOpOutcome, listPublished: boolean): string | null {
   switch (op.status) {
     case 'done':
-      return op.kind === 'leave' ? leaveText(op.reason) : null
+      if (op.kind === 'leave') {
+        return leaveText(op.reason)
+      }
+      return listPublished ? (PUBLISHED_TEXT[op.kind] ?? null) : null
     case 'changed':
       return op.contentApplied
         ? 'Partly done, then changed since it was planned. Run it again to re-plan.'
@@ -58,23 +69,20 @@ function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
   }
 }
 
+/**
+ * `listPublished`: the skill's summary line says "Needs attention", so name each location that
+ * did get new content rather than let one refusal hide it.
+ */
 export function describeOutcomeOpLines(
   skill: string,
   op: BundledSkillOpOutcome,
-  backupFolder: string
+  backupFolder: string,
+  listPublished = false
 ): string[] {
   const refusal = bundledSkillOpRefusalNotice(skill, op)
-  const text = refusal ? null : describeOutcomeOp(op)
+  const text = refusal ? null : describeOutcomeOp(op, listPublished)
   return [
-    ...(refusal
-      ? [
-          // A left-over refusal beside a main copy that landed still reports the update first.
-          ...(refusal.source === 'leftover' && refusal.contentApplied && op.kind !== 'keep'
-            ? [`  ${skill}: updated.`]
-            : []),
-          `  ${describeRefusal(refusal, backupFolder)}`
-        ]
-      : []),
+    ...(refusal ? [`  ${describeRefusal(refusal, backupFolder)}`] : []),
     ...(text ? [`  ${op.path}: ${text}`] : []),
     ...bundledSkillOpBackupPaths(op).map((path) => `  ${op.path}: Backed up to ${path}`)
   ]

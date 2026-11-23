@@ -55,9 +55,21 @@ function Rows(): React.JSX.Element {
       {row('orca-linear', [
         refused('orca-linear', 'leftover', `${SKILLS}/.orca-linear.orca-old-3f2a9c1e`, {
           kind: 'keep',
-          contentApplied: true
+          currentConfirmed: true
         }),
         linked('orca-linear')
+      ])}
+      {row('orca-plan', [
+        refused('orca-plan', 'moved-aside', `${SKILLS}/.orca-planner.orca-old-5c09b7d2`, {
+          kind: 'keep',
+          currentConfirmed: true
+        })
+      ])}
+      {row('gemini-former', [
+        refused('gemini-former', 'in-place', '/Users/sam/.gemini/skills/gemini-former', {
+          kind: 'write',
+          contentApplied: true
+        })
       ])}
       {row('electron', [
         refused('electron', 'moved-aside', `${SKILLS}/.electron.orca-old-7b1d44e0`, {

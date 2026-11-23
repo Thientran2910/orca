@@ -17,7 +17,11 @@ import {
   bundledSkillSetupResultHeadline,
   type BundledSkillSetupChanges
 } from './bundled-skill-setup-copy'
-import { skillRefusalSettingsLine } from '../freshness/skill-backup-refusal-copy'
+import {
+  skillRefusalSettingsBlocks,
+  skillRefusalSettingsText,
+  type SkillRefusalSettingsBlock
+} from '../freshness/skill-backup-refusal-copy'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { dirname } from '@/lib/path'
@@ -80,14 +84,26 @@ export function bundledSkillSetupAttentionMessage(plan: BundledSkillPlan): strin
   }
 }
 
+/** Per-skill result blocks when a backup was refused; null when the one-line result applies. */
+export function skillInstallRefusalBlocks(
+  result: BundledSkillInstallResult,
+  t: Translate = translate
+): SkillRefusalSettingsBlock[] | null {
+  const summary = summarizeBundledSkillOutcomes(result)
+  return skillRefusalSettingsBlocks(result, t, (outcome) => {
+    const text = summary.skills[result.skills.indexOf(outcome)]?.text
+    return text && text !== 'No change' ? skillOutcomeText(outcome, t) : null
+  })
+}
+
 export function skillInstallResultLine(
   result: BundledSkillInstallResult,
   changes?: BundledSkillSetupChanges,
   t: Translate = translate
 ): string {
-  const refusal = skillRefusalSettingsLine(result, t)
+  const refusal = skillInstallRefusalBlocks(result, t)
   if (refusal) {
-    return refusal
+    return skillRefusalSettingsText(refusal)
   }
   const summary = summarizeBundledSkillOutcomes(result)
   const texts = new Set(summary.skills.map((skill) => skill.text))

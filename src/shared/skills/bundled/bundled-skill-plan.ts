@@ -133,8 +133,10 @@ export type BundledSkillOpOutcome = {
   backupPaths?: string[]
   /** The new copy is in, but edits saved during the swap could not be backed up and remain here. */
   strandedPath?: string
-  /** The primary operation completed before a later check or backup failed. */
+  /** The op published its new copy or link before a later check or backup failed. */
   contentApplied?: true
+  /** A kept copy was checked to hold this build's bytes before a later backup failed; nothing was written. */
+  currentConfirmed?: true
   /** The refused cross-drive backup's source, including copies moved aside before the attempt. */
   backupRefusal?: BundledSkillBackupRefusal
 }

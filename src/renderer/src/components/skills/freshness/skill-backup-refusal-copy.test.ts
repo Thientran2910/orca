@@ -58,7 +58,7 @@ describe('cross-drive backup refusal copy', () => {
 
   it('S2: a left-over copy follows whether the main copy updated', () => {
     const leftover = `${SKILLS}/.orca.orca-old-1`
-    const keep = refused('leftover', leftover, { kind: 'keep', contentApplied: true })
+    const keep = refused('leftover', leftover, { kind: 'keep', currentConfirmed: true })
     expect(skillRefusalRowHeadline(outcome(keep))).toBe('Kept as is')
     expect(settings(outcome(keep))).toBe(`Kept as is · Left-over copy kept\n${leftover}`)
     expect(skillRefusalRowHeadline(outcome(keep, linked))).toBe('Updated')
@@ -91,6 +91,34 @@ describe('cross-drive backup refusal copy', () => {
     expect(skillRefusalLines({ ...notice, offeredAgain: true }).next).toBe(
       'Move it out of the skills folder to keep it.'
     )
+  })
+
+  it('never calls a rechecked keep with a refused retirement an update', () => {
+    const old = `${SKILLS}/.former-skill.orca-old-1`
+    const keep = refused('moved-aside', old, { kind: 'keep', currentConfirmed: true })
+    expect(skillRefusalRowHeadline(outcome(keep))).toBe('Kept as is')
+    expect(settings(outcome(keep))).toBe(`Up to date · Old copy moved aside\n${old}`)
+  })
+
+  it('gives each skill its own state in a mixed batch', () => {
+    const kept = refused('in-place', `${SKILLS}/orca`)
+    const other: BundledSkillOutcome = {
+      name: 'other',
+      status: 'ran',
+      ops: [{ ...linked, path: '/home/u/.claude/skills/other' }]
+    }
+    const unchanged: BundledSkillOutcome = {
+      name: 'quiet',
+      status: 'ran',
+      ops: [{ path: `${SKILLS}/quiet`, kind: 'keep', status: 'done' }]
+    }
+    expect(
+      skillRefusalSettingsLine(
+        { scope: 'global', skills: [other, unchanged, outcome(kept)] },
+        undefined,
+        (skill) => (skill.name === 'other' ? 'Linked' : null)
+      )
+    ).toBe(`orca: Kept as is · On another drive\n  ${SKILLS}/orca\nother: Linked`)
   })
 
   it('leaves results without a refusal to the existing copy', () => {

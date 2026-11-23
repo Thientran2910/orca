@@ -9,10 +9,13 @@ import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
 
 const SKILLS = '/Users/sam/.agents/skills'
 
-function status(ops: BundledSkillOpOutcome[]): React.JSX.Element {
+function status(
+  ops: BundledSkillOpOutcome[],
+  others: BundledSkillInstallResult['skills'] = []
+): React.JSX.Element {
   const result: BundledSkillInstallResult = {
     scope: 'global',
-    skills: [{ name: 'orca-cli', status: 'ran', ops }]
+    skills: [{ name: 'orca-cli', status: 'ran', ops }, ...others]
   }
   const state = { kind: 'done' as const, result, summary: summarizeBundledSkillOutcomes(result) }
   return <BundledSkillInstallStatus install={{ state, retry: () => {} }} />
@@ -44,7 +47,13 @@ function Lines(): React.JSX.Element {
       {status([
         refused('leftover', `${SKILLS}/.orca-cli.orca-old-3f2a9c1e`, {
           kind: 'keep',
-          contentApplied: true
+          currentConfirmed: true
+        })
+      ])}
+      {status([
+        refused('moved-aside', `${SKILLS}/.orca-cli-old.orca-old-5c09b7d2`, {
+          kind: 'keep',
+          currentConfirmed: true
         })
       ])}
       {status([
@@ -53,8 +62,59 @@ function Lines(): React.JSX.Element {
           contentApplied: true
         })
       ])}
+      {status(
+        [refused('in-place', `${SKILLS}/orca-cli`)],
+        [
+          {
+            name: 'orchestration',
+            status: 'ran',
+            ops: [{ path: `${SKILLS}/orchestration`, kind: 'update', status: 'done' }]
+          }
+        ]
+      )}
     </div>
   )
 }
 
 export const states = defineFixture({ render: () => <Lines />, width: 480 })
+
+const LONG = 'orca-cli-orchestration-and-worktree-handoff'
+const updated = (name: string): BundledSkillInstallResult['skills'][number] => ({
+  name,
+  status: 'ran',
+  ops: [{ path: `${SKILLS}/${name}`, kind: 'update', status: 'done' }]
+})
+
+/** Four skills to report: refused ones first, three shown, the rest behind "Show 1 more". */
+function Batch(): React.JSX.Element {
+  return (
+    <div className="bg-background p-4">
+      {status(
+        [refused('in-place', `${SKILLS}/orca-cli`)],
+        [
+          updated('orchestration'),
+          {
+            name: LONG,
+            status: 'ran',
+            ops: [
+              {
+                path: `${SKILLS}/${LONG}`,
+                kind: 'keep',
+                status: 'failed',
+                error: 'EXDEV',
+                currentConfirmed: true,
+                backupRefusal: {
+                  path: `${SKILLS}/.${LONG}.orca-old-0c6e2f19-91aa-4d0b-8f3e-5a2b7c9d1e44`,
+                  source: 'moved-aside'
+                }
+              }
+            ]
+          },
+          updated('electron')
+        ]
+      )}
+    </div>
+  )
+}
+
+export const batch = defineFixture({ render: () => <Batch />, width: 320 })

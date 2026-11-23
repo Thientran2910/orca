@@ -258,7 +258,12 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
     const lines = result.skills.flatMap((outcome, index) => [
       `${outcome.name}: ${summary.skills[index].line}`,
       ...outcome.ops.flatMap((op) =>
-        describeOutcomeOpLines(outcome.name, op, bundledSkillBackupDirectory(plan.homeDirectory))
+        describeOutcomeOpLines(
+          outcome.name,
+          op,
+          bundledSkillBackupDirectory(plan.homeDirectory),
+          summary.skills[index].text === 'Needs attention'
+        )
       )
     ])
     if (lines.length === 0 && notInstalledLines.length === 0) {

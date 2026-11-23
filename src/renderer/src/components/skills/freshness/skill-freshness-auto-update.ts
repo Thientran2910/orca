@@ -93,21 +93,26 @@ function warnAboutRefusal(target: BundledSkillTarget, notice: BundledSkillRefusa
     'auto.components.skills.skillBackupRefusal.toastReason',
     "Couldn't back it up: it's on another drive."
   )
-  toast.warning(
-    translate(
-      'auto.components.skills.skillBackupRefusal.toastTitle',
-      '{{value0}} updated · Old copy moved aside',
-      { value0: notice.skill }
-    ),
-    {
-      description: notice.offeredAgain
-        ? reason
-        : `${reason} ${translate('auto.components.skills.skillBackupRefusal.toastNoReminder', "Orca won't remind you.")}`,
-      duration: Number.POSITIVE_INFINITY,
-      action: retainedPathAction(target, notice.path),
-      cancel: dismissAction()
-    }
-  )
+  // Only a published copy is an update; a kept copy that was only rechecked is not.
+  const title = notice.contentApplied
+    ? translate(
+        'auto.components.skills.skillBackupRefusal.toastTitle',
+        '{{value0}} updated · Old copy moved aside',
+        { value0: notice.skill }
+      )
+    : translate(
+        'auto.components.skills.skillBackupRefusal.toastTitleKept',
+        '{{value0}} · Old copy moved aside',
+        { value0: notice.skill }
+      )
+  toast.warning(title, {
+    description: notice.offeredAgain
+      ? reason
+      : `${reason} ${translate('auto.components.skills.skillBackupRefusal.toastNoReminder', "Orca won't remind you.")}`,
+    duration: Number.POSITIVE_INFINITY,
+    action: retainedPathAction(target, notice.path),
+    cancel: dismissAction()
+  })
 }
 
 function warnAboutRefusals(
@@ -194,18 +199,26 @@ function targetLabel(target: BundledSkillTarget): string {
 }
 
 /** A lost or timed-out reply may follow a committed swap, so its backups must not go unmentioned. */
-function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPlan): void {
-  warnAboutEdits(
+export function reportUncertainOutcome(
+  target: BundledSkillTarget,
+  plan: Pick<BundledSkillPlan, 'homeDirectory'>
+): void {
+  // A refused backup leaves an edited copy beside its skill, so name both places.
+  toast.warning(
     translate(
-      'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitle',
-      "Orca couldn't confirm the skill update on {{value0}}",
+      'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitleShort',
+      "Couldn't confirm skill updates on {{value0}}",
       { value0: targetLabel(target) }
     ),
-    translate(
-      'auto.components.skills.skillFreshnessAutoUpdate.uncertainDescription',
-      "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}.",
-      { value0: targetLabel(target), value1: skillBackupDirectory(plan.homeDirectory) }
-    )
+    {
+      description: translate(
+        'auto.components.skills.skillFreshnessAutoUpdate.uncertainEditedCopies',
+        'Edited copies are in the backup folder or next to their skill.'
+      ),
+      duration: Number.POSITIVE_INFINITY,
+      action: retainedPathAction(target, skillBackupDirectory(plan.homeDirectory)),
+      cancel: dismissAction()
+    }
   )
 }
 
@@ -224,7 +237,10 @@ export function autoUpdateUnmodifiedSkills(
   const targetKey = bundledSkillTargetKey(target)
   // A manual update or its unacknowledged result owns the target; the nudge covers the rest meanwhile.
   const canStart = getSkillUpdateRun(targetKey).state === 'idle'
-  const entries = plan.skills.map((entry) => ({ entry, key: attemptKey(targetKey, entry) }))
+  const entries = plan.skills.map((entry) => ({
+    entry,
+    key: attemptKey(targetKey, entry)
+  }))
   pruneAttempts(targetKey, new Set(entries.flatMap(({ key }) => (key ? [key] : []))))
   let attempts = attemptsByTarget.get(targetKey)
   if (!attempts) {

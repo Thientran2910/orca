@@ -9,6 +9,7 @@ import type {
   BundledSkillPlanEntry
 } from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillSource } from './bundled-skill-sources'
+import { bundledSkillOpKindPublishes } from '../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import { classifyBundledSkillPath } from './bundled-skill-classification'
 import { filesystemErrorCode } from './bundled-skill-filesystem-error'
 import type { BundledSkillPlanInput } from './bundled-skill-plan'
@@ -186,18 +187,20 @@ export type AppliedOp = {
   outcome: BundledSkillOpOutcome
   /** This op's location was checked to hold the planned bytes, so it can back links and a marker. */
   verified: boolean
+  /** The op's own step finished (or its copy was rechecked), so ops that require it may run. */
+  satisfiesDependents: boolean
 }
 
 export async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<AppliedOp> {
   const { path, kind, reason } = op
   const progress: OpProgress = { backups: [] }
-  let contentApplied = false
+  let primaryDone = false
   try {
     const primaryBackup = await applyContent(run, op, progress)
     if (primaryBackup) {
       progress.backups.push(primaryBackup)
     }
-    contentApplied = true
+    primaryDone = true
     for (const previous of op.previous ?? []) {
       if (previous.retain) {
         await requireUnchanged(run, previous.path, previous.observed)
@@ -210,12 +213,17 @@ export async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<Applie
         (path) => verifier(run, path, previous.observed)(),
         backupFor(run)
       ).catch((error: unknown) => {
-        // Known limit: nothing rediscovers a former root's moved-aside copy, so say so once.
+        // A copy put back in place sits where the user left it. If the put-back failed, nothing
+        // rediscovers a former root's moved-aside copy, so say so once.
         if (
           error instanceof BundledSkillBackupRefusedError &&
+          error.refusal.source === 'moved-aside' &&
           formerSkillRootPaths(run.input.destination).includes(dirname(previous.path))
         ) {
-          throw new BundledSkillBackupRefusedError({ ...error.refusal, onlyNotice: true })
+          throw new BundledSkillBackupRefusedError({
+            ...error.refusal,
+            onlyNotice: true
+          })
         }
         throw error
       })
@@ -231,7 +239,8 @@ export async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<Applie
         ...(reason && { reason }),
         ...backupFields(progress.backups)
       },
-      verified: kind !== 'keep' || isOwnNameKeep(run, op)
+      verified: kind !== 'keep' || isOwnNameKeep(run, op),
+      satisfiesDependents: true
     }
   } catch (error) {
     const strandedPath = error instanceof BundledSkillStrandedError ? error.path : undefined
@@ -243,31 +252,50 @@ export async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<Applie
       progress.backups.push(error.backupPath)
     }
     // A stranded old copy was moved aside only after the new copy was published.
-    contentApplied ||= Boolean(strandedPath)
+    primaryDone ||= Boolean(strandedPath)
+    // Publication and a recheck are distinct: only the first may be reported as an update.
+    const contentApplied = primaryDone && bundledSkillOpKindPublishes(kind)
     // A cleanup failing beside an already-current copy leaves that copy in place; prove it still is.
-    if (!contentApplied && isOwnNameKeep(run, op)) {
-      contentApplied = await verifier(run, op.path, op.observed)().catch(() => false)
-    }
+    const currentConfirmed =
+      isOwnNameKeep(run, op) &&
+      (primaryDone || (await verifier(run, op.path, op.observed)().catch(() => false)))
     const partial = {
       path,
       kind,
       ...(contentApplied && { contentApplied: true as const }),
+      ...(currentConfirmed && { currentConfirmed: true as const }),
       ...(strandedPath && { strandedPath }),
       ...backupFields(progress.backups)
     }
-    const verified = contentApplied && (kind !== 'keep' || isOwnNameKeep(run, op))
+    const verified = (primaryDone && kind !== 'keep') || currentConfirmed
+    const satisfiesDependents = primaryDone || currentConfirmed
     if (failure instanceof BundledSkillChangedError) {
-      return { outcome: { ...partial, status: 'changed' }, verified }
+      return {
+        outcome: { ...partial, status: 'changed' },
+        verified,
+        satisfiesDependents
+      }
     }
     if (failure instanceof BundledSkillBackupRefusedError) {
       return {
-        outcome: { ...partial, status: 'failed', error: 'EXDEV', backupRefusal: failure.refusal },
-        verified
+        outcome: {
+          ...partial,
+          status: 'failed',
+          error: 'EXDEV',
+          backupRefusal: failure.refusal
+        },
+        verified,
+        satisfiesDependents
       }
     }
     return {
-      outcome: { ...partial, status: 'failed', error: filesystemErrorCode(failure) },
-      verified
+      outcome: {
+        ...partial,
+        status: 'failed',
+        error: filesystemErrorCode(failure)
+      },
+      verified,
+      satisfiesDependents
     }
   }
 }

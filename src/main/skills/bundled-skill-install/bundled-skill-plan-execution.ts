@@ -27,10 +27,14 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
   for (const op of run.entry.ops) {
     const applied: AppliedOp =
       op.requires && statuses.get(op.requires) !== 'done'
-        ? { outcome: { path: op.path, kind: op.kind, status: 'skipped' }, verified: false }
+        ? {
+            outcome: { path: op.path, kind: op.kind, status: 'skipped' },
+            verified: false,
+            satisfiesDependents: false
+          }
         : await applyOp(run, op)
     const { outcome } = applied
-    statuses.set(op.path, outcome.contentApplied ? 'done' : outcome.status)
+    statuses.set(op.path, applied.satisfiesDependents ? 'done' : outcome.status)
     if (applied.verified) {
       verified.add(op.path)
     }
@@ -83,7 +87,11 @@ export async function executeBundledSkillPlan(
     const skills: BundledSkillOutcome[] = []
     for (const entry of plan.skills) {
       skills.push(
-        await runSkill({ input, entry, source: findBundledSkillSource(input.sources, entry.name) })
+        await runSkill({
+          input,
+          entry,
+          source: findBundledSkillSource(input.sources, entry.name)
+        })
       )
     }
     return { scope: plan.scope, skills }
@@ -97,14 +105,20 @@ export async function executeBundledSkillPlan(
  * update and only records copies that already hold this build's bytes.
  */
 export async function autoUpdateBundledSkills(
-  input: BundledSkillExecuteInput & { names: readonly string[]; recordOnly?: boolean }
+  input: BundledSkillExecuteInput & {
+    names: readonly string[]
+    recordOnly?: boolean
+  }
 ): Promise<BundledSkillInstallResult> {
   const unrun = (status: 'changed' | 'busy'): BundledSkillInstallResult => ({
     scope: input.destination.scope,
     skills: input.names.map((name) => ({ name, status, ops: [] }))
   })
   return withBundledSkillTargetLocks(input, unrun, async () => {
-    const { plan } = await buildBundledSkillPlan({ ...input, installedOnly: true })
+    const { plan } = await buildBundledSkillPlan({
+      ...input,
+      installedOnly: true
+    })
     const skills: BundledSkillOutcome[] = []
     for (const entry of plan.skills) {
       const safe = entry.ops.filter(isBundledSkillAutoUpdateOp)
