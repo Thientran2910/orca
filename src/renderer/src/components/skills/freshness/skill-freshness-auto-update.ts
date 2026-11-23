@@ -140,7 +140,7 @@ function warnAboutRefusals(
 }
 
 /** A write that raced the update is kept aside; never let that pass as a silent success. */
-function reportPreservedEdits(
+export function reportPreservedEdits(
   target: BundledSkillTarget,
   result: BundledSkillInstallResult | null
 ): void {
