@@ -74,9 +74,13 @@ export async function retireBundledSkillPlacement(
 }
 
 /** Backups stay outside skill roots (agents would load them) and projects (they would pollute repos). */
+export function bundledSkillBackupDirectory(homeDirectory: string): string {
+  return join(homeDirectory, '.agents', '.orca-skill-backups')
+}
+
 export function bundledSkillBackupPath(homeDirectory: string, name: string): string {
   const utc = new Date().toISOString().replace(/[:.]/gu, '-')
-  return join(homeDirectory, '.agents', '.orca-skill-backups', `${name}-${utc}-${randomUUID()}`)
+  return join(bundledSkillBackupDirectory(homeDirectory), `${name}-${utc}-${randomUUID()}`)
 }
 
 /** The installer's only delete: it refuses anything but its own stage and old siblings. */

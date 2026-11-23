@@ -5,8 +5,10 @@ import {
   bundledSkillOutcomeText,
   type BundledSkillPlanSkillSummary
 } from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { bundledSkillOutcomeRefusalNotices } from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '@/components/ui/checkbox'
+import { skillRefusalLines, skillRefusalRowHeadline } from './skill-backup-refusal-copy'
 import {
   locationPlaceLabel,
   locationStateText,
@@ -18,6 +20,17 @@ import { skillBackupPaths, type SkillBackupLocation } from './skill-backup-locat
 import { SkillBackupPathLine } from './SkillBackupPathLine'
 
 export type SkillRowPhase = 'plan' | 'pending' | 'result'
+
+/** Truncates in the middle: the folder shrinks, the last name stays; the full path is selectable. */
+function RetainedPath({ path }: { path: string }): React.JSX.Element {
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1
+  return (
+    <span className="flex min-w-0 select-text font-mono text-xs text-muted-foreground" title={path}>
+      <span className="truncate">{path.slice(0, cut)}</span>
+      <span className="shrink-0">{path.slice(cut)}</span>
+    </span>
+  )
+}
 
 export type SkillReplaceToggle = {
   isReplaced: (path: string) => boolean
@@ -118,11 +131,12 @@ export function SkillUpdateRow({
     phase === 'pending'
       ? t('auto.components.skills.SkillFreshnessUpdateDialog.updating', 'Updating…')
       : phase === 'result' && outcome
-        ? // Why: a skill the run only reports on shows its left-alone lines, not "No change".
-          bundledSkillOutcomeText(outcome) === 'No change' &&
+        ? (skillRefusalRowHeadline(outcome, t) ??
+          // Why: a skill the run only reports on shows its left-alone lines, not "No change".
+          (bundledSkillOutcomeText(outcome) === 'No change' &&
           outcome.ops.some((op) => op.kind === 'leave')
-          ? null
-          : skillOutcomeText(outcome, t)
+            ? null
+            : skillOutcomeText(outcome, t)))
         : replacement
           ? locationStateText(replacement)
           : skillPlanHeadline(skill.state, t)
@@ -142,6 +156,22 @@ export function SkillUpdateRow({
       </span>
       <div className="flex min-w-0 flex-col gap-1.5 text-foreground">
         {headline ? <span>{headline}</span> : null}
+        {phase === 'result' && outcome
+          ? bundledSkillOutcomeRefusalNotices(outcome).map((notice) => {
+              const lines = skillRefusalLines(notice, t)
+              return (
+                <div
+                  key={notice.path}
+                  data-backup-refusal={notice.source}
+                  className="flex min-w-0 flex-col gap-0.5"
+                >
+                  <span>{lines.reason}</span>
+                  <RetainedPath path={lines.path} />
+                  <span className="text-muted-foreground">{lines.next}</span>
+                </div>
+              )
+            })
+          : null}
         {choices.map((location) => {
           const reason = location.state === 'leave' ? locationStateText(location) : null
           const uniqueReason = reason && !seenReasons.has(reason) ? reason : null

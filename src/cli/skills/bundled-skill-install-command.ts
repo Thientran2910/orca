@@ -10,18 +10,13 @@ import { getRepeatedStringFlag } from '../arguments/flags'
 import { writeStdoutLine } from '../output/stdout-line'
 import { skillsCliAgentAliases } from './skills-cli-agent-aliases'
 import { loadCanonicalGuides, type BundledSkillGuide } from './bundled-skill-guide-table'
-import type {
-  BundledSkillOp,
-  BundledSkillOpOutcome,
-  BundledSkillPlan
-} from '../../shared/skills/bundled/bundled-skill-plan'
-import { isBundledSkillLeaveReason } from '../../shared/skills/bundled/bundled-skill-plan'
 import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
+import { summarizeBundledSkillOutcomes } from '../../shared/skills/bundled/bundled-skill-summary'
 import {
-  BUNDLED_SKILL_LEAVE_REASON_TEXT,
-  BUNDLED_SKILL_PLAN_OP_TEXT,
-  summarizeBundledSkillOutcomes
-} from '../../shared/skills/bundled/bundled-skill-summary'
+  describeOutcomeOpLines,
+  describePlan,
+  hasReplaceableLeave
+} from './bundled-skill-install-lines'
 import {
   isSkillInstallProviderId,
   SKILL_INSTALL_PROVIDERS,
@@ -33,6 +28,7 @@ import {
   previewBundledSkillInstall
 } from '../../main/skills/bundled-skill-install/bundled-skill-installation'
 import { localBundledSkillInput } from '../../main/skills/bundled-skill-install/bundled-skill-local-host'
+import { bundledSkillBackupDirectory } from '../../main/skills/bundled-skill-install/bundled-skill-folder-swap'
 
 export type SkillMutationVerb = 'install' | 'update'
 
@@ -119,47 +115,6 @@ function formatSkillSelectionHelp(verb: SkillMutationVerb, skillNames: string[])
     `Usage: orca skills ${verb} --skill <name> [--skill <name> ...]`,
     `   or: orca skills ${verb} --all`
   ].join('\n')
-}
-
-function leaveText(reason: string | undefined): string {
-  const text =
-    reason && isBundledSkillLeaveReason(reason)
-      ? BUNDLED_SKILL_LEAVE_REASON_TEXT[reason]
-      : 'This copy was kept as it is'
-  return `Update skipped: ${text}`
-}
-
-function describePlanOp(op: BundledSkillOp): string {
-  return op.kind === 'leave' ? leaveText(op.reason) : BUNDLED_SKILL_PLAN_OP_TEXT[op.kind]
-}
-
-function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
-  switch (op.status) {
-    case 'done':
-      if (op.backupPath) {
-        return `Old copy moved to ${op.backupPath}`
-      }
-      return op.kind === 'leave' ? leaveText(op.reason) : null
-    case 'changed':
-      return 'Changed since it was planned; nothing was written. Run it again to re-plan.'
-    case 'skipped':
-      return 'Skipped: the shared copy it depends on did not land.'
-    case 'failed':
-      return `Failed: ${op.error ?? 'unknown error'}`
-  }
-}
-
-function hasReplaceableLeave(plan: BundledSkillPlan): boolean {
-  return plan.skills.some((entry) =>
-    entry.ops.some((op) => op.kind === 'leave' && op.replaceable === true)
-  )
-}
-
-function describePlan(plan: BundledSkillPlan): string[] {
-  return plan.skills.flatMap((entry) => [
-    entry.name,
-    ...entry.ops.map((op) => `  ${op.path}: ${describePlanOp(op)}`)
-  ])
 }
 
 async function workspaceDirectory(): Promise<string> {
@@ -302,10 +257,9 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
     }
     const lines = result.skills.flatMap((outcome, index) => [
       `${outcome.name}: ${summary.skills[index].line}`,
-      ...outcome.ops.flatMap((op) => {
-        const text = describeOutcomeOp(op)
-        return text ? [`  ${op.path}: ${text}`] : []
-      })
+      ...outcome.ops.flatMap((op) =>
+        describeOutcomeOpLines(outcome.name, op, bundledSkillBackupDirectory(plan.homeDirectory))
+      )
     ])
     if (lines.length === 0 && notInstalledLines.length === 0) {
       lines.push('No Orca skills are installed here, so there is nothing to update.')

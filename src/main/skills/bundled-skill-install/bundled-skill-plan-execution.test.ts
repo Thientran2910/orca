@@ -159,7 +159,7 @@ describe('interrupted swaps', () => {
 
   it('reports the original backup if a writer occupies the target before Replace finishes', async () => {
     const home = await makeSkillHome()
-    const edited = OLD_TEXT + 'Local edit\n'
+    const edited = `${OLD_TEXT}Local edit\n`
     await writeCopy(home.shared, edited)
     const filesystem: BundledSkillFilesystem = {
       ...nativeBundledSkillFilesystem,
@@ -182,7 +182,7 @@ describe('interrupted swaps', () => {
   })
   it('puts the original back with its own mode when Replace fails on a free target', async () => {
     const home = await makeSkillHome()
-    const edited = OLD_TEXT + 'Local edit\n'
+    const edited = `${OLD_TEXT}Local edit\n`
     await writeCopy(home.shared, edited, { 'notes.md': 'user payload' })
     const modeBefore = (await stat(home.shared)).mode
     const filesystem: BundledSkillFilesystem = {
@@ -213,7 +213,7 @@ describe('interrupted swaps', () => {
 
   it('keeps a finished Replace when the backup cannot be made private', async () => {
     const home = await makeSkillHome()
-    await writeCopy(home.shared, OLD_TEXT + 'Local edit\n')
+    await writeCopy(home.shared, `${OLD_TEXT}Local edit\n`)
     const filesystem: BundledSkillFilesystem = {
       ...nativeBundledSkillFilesystem,
       privatizeBackup: async () => {
@@ -227,7 +227,7 @@ describe('interrupted swaps', () => {
     expect(done.status).toBe('done')
     expect(done.backupPaths).toEqual([done.backupPath])
     expect(await readFile(join(done.backupPath ?? '', 'SKILL.md'), 'utf8')).toBe(
-      OLD_TEXT + 'Local edit\n'
+      `${OLD_TEXT}Local edit\n`
     )
     expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
   })
@@ -242,7 +242,7 @@ describe('cross-drive backup refusal', () => {
       if (content === 'link') {
         await writeCopy(home.shared, NEW_TEXT)
       }
-      const edited = OLD_TEXT + 'Local edit\n'
+      const edited = `${OLD_TEXT}Local edit\n`
       await writeCopy(target, edited, { 'notes.md': 'user payload' })
       const backups = join(home.home, '.agents', '.orca-skill-backups')
       let refused = false
@@ -396,7 +396,7 @@ describe('cross-drive backup refusal', () => {
         },
         readFile: async (path, maxBytes) => {
           if (oldPath && path === join(oldPath, 'SKILL.md') && ++oldReads === 2) {
-            await writeFile(path, OLD_TEXT + 'Late edit\n')
+            await writeFile(path, `${OLD_TEXT}Late edit\n`)
           }
           return nativeBundledSkillFilesystem.readFile(path, maxBytes)
         }
@@ -417,7 +417,7 @@ describe('cross-drive backup refusal', () => {
         },
         { path: home.claude, status: 'done' }
       ])
-      expect(await readFile(join(oldPath, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT + 'Late edit\n')
+      expect(await readFile(join(oldPath, 'SKILL.md'), 'utf8')).toBe(`${OLD_TEXT}Late edit\n`)
       expect(await readdir(backups)).toEqual([])
       if (placement === 'former name') {
         // The former placement now forwards to the new copy; recovery must still find the edit.
@@ -431,7 +431,7 @@ describe('cross-drive backup refusal', () => {
         // Known limit: nothing rediscovers a former root's retained copy; later runs must leave it be.
         await previewAndInstall(input)
         await previewAndInstall(input)
-        expect(await readFile(join(oldPath, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT + 'Late edit\n')
+        expect(await readFile(join(oldPath, 'SKILL.md'), 'utf8')).toBe(`${OLD_TEXT}Late edit\n`)
         expect(await readdir(backups)).toEqual([])
         return
       }
@@ -444,7 +444,7 @@ describe('cross-drive backup refusal', () => {
       expect(await snapshot(oldPath)).toBe('missing')
       const [backup] = await readdir(backups)
       expect(await readFile(join(backups, backup, 'SKILL.md'), 'utf8')).toBe(
-        OLD_TEXT + 'Late edit\n'
+        `${OLD_TEXT}Late edit\n`
       )
     }
   )
@@ -471,8 +471,8 @@ describe('refusal outcomes', () => {
   it('reports a backup that finished before a later refusal', async () => {
     const home = await makeSkillHome()
     const leftover = join(dirname(home.shared), `.${NAME}.orca-old-earlier`)
-    await writeCopy(home.shared, OLD_TEXT + 'Local edit\n')
-    await writeCopy(leftover, OLD_TEXT + 'Earlier edit\n')
+    await writeCopy(home.shared, `${OLD_TEXT}Local edit\n`)
+    await writeCopy(leftover, `${OLD_TEXT}Earlier edit\n`)
     const backups = join(home.home, '.agents', '.orca-skill-backups')
     const input = serviceInput(home, { agents: [], force: [home.shared] })
     const plan = await previewBundledSkillInstall(input)
@@ -490,9 +490,9 @@ describe('refusal outcomes', () => {
       backupRefusal: { path: home.shared, source: 'in-place' }
     })
     expect(await readFile(join(backups, backup, 'SKILL.md'), 'utf8')).toBe(
-      OLD_TEXT + 'Earlier edit\n'
+      `${OLD_TEXT}Earlier edit\n`
     )
-    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT + 'Local edit\n')
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(`${OLD_TEXT}Local edit\n`)
   })
 
   it('does not call an EXDEV outside the backup move a refusal', async () => {
@@ -526,7 +526,7 @@ describe('refusal outcomes', () => {
       const home = await makeSkillHome()
       const leftover = join(dirname(home.shared), `.${NAME}.orca-old-earlier`)
       await writeCopy(home.shared, NEW_TEXT)
-      await writeCopy(leftover, OLD_TEXT + 'Earlier edit\n')
+      await writeCopy(leftover, `${OLD_TEXT}Earlier edit\n`)
       const backups = join(home.home, '.agents', '.orca-skill-backups')
       const digests = join(home.home, '.agents', '.orca-skill-digests')
       const input = serviceInput(home, { agents: ['claude'] })
@@ -553,7 +553,7 @@ describe('refusal outcomes', () => {
         error: 'EXDEV',
         backupRefusal: { path: leftover, source: 'leftover' }
       })
-      expect(await readFile(join(leftover, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT + 'Earlier edit\n')
+      expect(await readFile(join(leftover, 'SKILL.md'), 'utf8')).toBe(`${OLD_TEXT}Earlier edit\n`)
       if (parent === 'stable') {
         expect(shared.contentApplied).toBe(true)
         expect(link.status).toBe('done')

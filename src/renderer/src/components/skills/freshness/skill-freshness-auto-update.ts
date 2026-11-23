@@ -8,6 +8,13 @@ import {
   holdsCurrentBundledSkillCopy,
   isBundledSkillAutoUpdateOp
 } from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import {
+  bundledSkillOpBackupPaths,
+  bundledSkillRefusalNotices,
+  type BundledSkillRefusalNotice
+} from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { revealInFileManager } from '@/lib/files/os-open/reveal-in-file-manager'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   bundledSkillTargetKey,
@@ -56,11 +63,97 @@ function warnAboutEdits(title: string, description: string): void {
   toast.warning(title, { description, duration: Number.POSITIVE_INFINITY })
 }
 
+/** Show in folder where this computer can open the path, Copy path for another host's. */
+function retainedPathAction(target: BundledSkillTarget, path: string) {
+  return target.kind === 'local'
+    ? {
+        label: translate(
+          'auto.components.skills.skillBackupRefusal.showInFolder',
+          'Show in folder'
+        ),
+        onClick: () => void revealInFileManager(path, LOCAL_EXECUTION_HOST_ID)
+      }
+    : {
+        label: translate('auto.components.skills.SkillRow.copyPath', 'Copy path'),
+        onClick: () => void window.api.ui.writeClipboardText(path)
+      }
+}
+
+function dismissAction() {
+  return {
+    label: translate('auto.components.skills.skillBackupRefusal.dismiss', 'Dismiss'),
+    onClick: () => undefined
+  }
+}
+
+// Sticky: for an automatic update this toast is the only notice, and for a former root's copy
+// no later plan mentions it again.
+function warnAboutRefusal(target: BundledSkillTarget, notice: BundledSkillRefusalNotice): void {
+  const reason = translate(
+    'auto.components.skills.skillBackupRefusal.toastReason',
+    "Couldn't back it up: it's on another drive."
+  )
+  toast.warning(
+    translate(
+      'auto.components.skills.skillBackupRefusal.toastTitle',
+      '{{value0}} updated · Old copy moved aside',
+      { value0: notice.skill }
+    ),
+    {
+      description: notice.offeredAgain
+        ? reason
+        : `${reason} ${translate('auto.components.skills.skillBackupRefusal.toastNoReminder', "Orca won't remind you.")}`,
+      duration: Number.POSITIVE_INFINITY,
+      action: retainedPathAction(target, notice.path),
+      cancel: dismissAction()
+    }
+  )
+}
+
+function warnAboutRefusals(
+  target: BundledSkillTarget,
+  notices: readonly BundledSkillRefusalNotice[]
+): void {
+  if (notices.length === 1) {
+    warnAboutRefusal(target, notices[0])
+    return
+  }
+  toast.warning(
+    translate(
+      'auto.components.skills.skillBackupRefusal.toastGroupTitle',
+      '{{count}} old copies moved aside',
+      { count: notices.length }
+    ),
+    {
+      description: translate(
+        'auto.components.skills.skillBackupRefusal.toastGroupReason',
+        "Couldn't back them up: they're on another drive."
+      ),
+      duration: Number.POSITIVE_INFINITY,
+      action: {
+        label: translate('auto.components.skills.skillBackupRefusal.showDetails', 'Show details'),
+        onClick: () => notices.forEach((notice) => warnAboutRefusal(target, notice))
+      },
+      cancel: dismissAction()
+    }
+  )
+}
+
 /** A write that raced the update is kept aside; never let that pass as a silent success. */
-function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
+function reportPreservedEdits(
+  target: BundledSkillTarget,
+  result: BundledSkillInstallResult | null
+): void {
+  const refusals = bundledSkillRefusalNotices(result).filter(
+    (notice) => notice.source === 'moved-aside'
+  )
+  if (refusals.length > 0) {
+    warnAboutRefusals(target, refusals)
+  }
   for (const skill of result?.skills ?? []) {
     for (const op of skill.ops) {
-      if (op.strandedPath) {
+      // A refused backup is reported above; strandedPath alone covers other backup failures.
+      if (op.strandedPath && !op.backupRefusal) {
         warnAboutEdits(
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.strandedTitle',
@@ -73,7 +166,9 @@ function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
             { value0: op.strandedPath }
           )
         )
-      } else if (op.backupPath) {
+      }
+      // Backups that finished still surface beside a later refusal in the same op.
+      for (const backupPath of bundledSkillOpBackupPaths(op)) {
         warnAboutEdits(
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.preservedTitle',
@@ -83,7 +178,7 @@ function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.preservedDescription',
             'Orca updated the skill and saved your edits to {{value0}}.',
-            { value0: op.backupPath }
+            { value0: backupPath }
           )
         )
       }
@@ -175,7 +270,7 @@ export function autoUpdateUnmodifiedSkills(
       autoUpdateBundledSkillsOnTarget(target, names, { recordOnly })
     )
       .then(
-        (ran) => reportPreservedEdits(ran?.value ?? null),
+        (ran) => reportPreservedEdits(target, ran?.value ?? null),
         // Settling the keys below means the same state is never retried; the nudge takes over.
         // A record-only call writes no skill, so its failure has nothing to warn about.
         () => {

@@ -17,6 +17,7 @@ import {
   bundledSkillSetupResultHeadline,
   type BundledSkillSetupChanges
 } from './bundled-skill-setup-copy'
+import { skillRefusalSettingsLine } from '../freshness/skill-backup-refusal-copy'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { dirname } from '@/lib/path'
@@ -84,6 +85,10 @@ export function skillInstallResultLine(
   changes?: BundledSkillSetupChanges,
   t: Translate = translate
 ): string {
+  const refusal = skillRefusalSettingsLine(result, t)
+  if (refusal) {
+    return refusal
+  }
   const summary = summarizeBundledSkillOutcomes(result)
   const texts = new Set(summary.skills.map((skill) => skill.text))
   const headlineText = RESULT_HEADLINE_ORDER.find((text) => texts.has(text)) ?? 'No change'
