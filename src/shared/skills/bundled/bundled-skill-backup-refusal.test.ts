@@ -17,7 +17,7 @@ const op = (fields: Partial<BundledSkillOpOutcome>): BundledSkillOpOutcome => ({
 })
 
 describe('bundled skill backup refusal notices', () => {
-  it('offers a copy moved aside beside the skill again, but not one under a former root', () => {
+  it('offers a moved-aside copy again unless the host marks this result its only notice', () => {
     const beside = bundledSkillOpRefusalNotice(
       'orca',
       op({
@@ -36,24 +36,14 @@ describe('bundled skill backup refusal notices', () => {
       'orca',
       op({
         contentApplied: true,
-        backupRefusal: { path: '/home/u/.gemini/skills/.orca.orca-old-2', source: 'moved-aside' }
-      })
-    )
-    expect(formerRoot?.offeredAgain).toBe(false)
-  })
-
-  it('handles Windows host paths', () => {
-    const notice = bundledSkillOpRefusalNotice(
-      'orca',
-      op({
-        path: 'C:\\Users\\u\\.agents\\skills\\orca',
         backupRefusal: {
-          path: 'C:\\Users\\u\\.agents\\skills\\.orca.orca-old-1',
-          source: 'moved-aside'
+          path: '/home/u/.gemini/skills/.orca.orca-old-2',
+          source: 'moved-aside',
+          onlyNotice: true
         }
       })
     )
-    expect(notice?.offeredAgain).toBe(true)
+    expect(formerRoot?.offeredAgain).toBe(false)
   })
 
   it('never infers a refusal from a generic EXDEV', () => {

@@ -117,6 +117,8 @@ export type BundledSkillPlan = {
 export type BundledSkillBackupRefusal = {
   path: string
   source: 'in-place' | 'leftover' | 'moved-aside'
+  /** No later plan mentions this copy (a former agent root's), so this result is its only notice. */
+  onlyNotice?: true
 }
 
 export type BundledSkillOpOutcome = {

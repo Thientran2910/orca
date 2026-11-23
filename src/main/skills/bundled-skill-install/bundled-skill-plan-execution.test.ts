@@ -413,10 +413,17 @@ describe('cross-drive backup refusal', () => {
           status: 'failed',
           error: 'EXDEV',
           contentApplied: true,
-          backupRefusal: { path: oldPath, source: 'moved-aside' }
+          backupRefusal: {
+            path: oldPath,
+            source: 'moved-aside',
+            ...(placement === 'former root' && { onlyNotice: true })
+          }
         },
         { path: home.claude, status: 'done' }
       ])
+      expect(result.skills[0].ops[0].backupRefusal?.onlyNotice).toBe(
+        placement === 'former root' ? true : undefined
+      )
       expect(await readFile(join(oldPath, 'SKILL.md'), 'utf8')).toBe(`${OLD_TEXT}Late edit\n`)
       expect(await readdir(backups)).toEqual([])
       if (placement === 'former name') {

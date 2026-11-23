@@ -16,15 +16,8 @@ export type BundledSkillRefusalNotice = {
   source: BundledSkillBackupRefusal['source']
   /** The op's own new copy or link landed before the refusal. */
   contentApplied: boolean
-  /**
-   * Whether a later plan will offer this copy again. A copy moved aside outside the op's own
-   * folder (a former agent root) is not rediscovered, so this result is its only notice.
-   */
+  /** Whether a later plan mentions this copy again; a former agent root's copy is not rediscovered. */
   offeredAgain: boolean
-}
-
-function parentOf(path: string): string {
-  return path.replace(/[\\/]+[^\\/]+[\\/]*$/u, '')
 }
 
 export function bundledSkillOpRefusalNotice(
@@ -40,7 +33,7 @@ export function bundledSkillOpRefusalNotice(
     path: refusal.path,
     source: refusal.source,
     contentApplied: op.contentApplied === true,
-    offeredAgain: refusal.source !== 'moved-aside' || parentOf(refusal.path) === parentOf(op.path)
+    offeredAgain: refusal.onlyNotice !== true
   }
 }
 

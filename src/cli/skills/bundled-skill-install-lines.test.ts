@@ -36,7 +36,7 @@ describe('orca skills CLI refusal lines', () => {
           contentApplied: true,
           backupPath: `${BACKUPS}/orca-1`,
           backupPaths: [`${BACKUPS}/orca-1`],
-          backupRefusal: { path: old, source: 'moved-aside' }
+          backupRefusal: { path: old, source: 'moved-aside', onlyNotice: true }
         },
         BACKUPS
       )

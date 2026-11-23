@@ -1,5 +1,5 @@
 // Applies one planned op under the skill's locks, reporting what landed even when a later step fails.
-import { basename } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { sameBundledSkillObserved } from './bundled-skill-plan-identity'
 import type {
   BundledSkillCleanup,
@@ -12,6 +12,7 @@ import type { BundledSkillSource } from './bundled-skill-sources'
 import { classifyBundledSkillPath } from './bundled-skill-classification'
 import { filesystemErrorCode } from './bundled-skill-filesystem-error'
 import type { BundledSkillPlanInput } from './bundled-skill-plan'
+import { formerSkillRootPaths } from './former-skill-roots'
 import {
   BundledSkillBackupRefusedError,
   BundledSkillChangedError,
@@ -208,7 +209,16 @@ export async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<Applie
         previous.forward ? op.path : undefined,
         (path) => verifier(run, path, previous.observed)(),
         backupFor(run)
-      )
+      ).catch((error: unknown) => {
+        // Known limit: nothing rediscovers a former root's moved-aside copy, so say so once.
+        if (
+          error instanceof BundledSkillBackupRefusedError &&
+          formerSkillRootPaths(run.input.destination).includes(dirname(previous.path))
+        ) {
+          throw new BundledSkillBackupRefusedError({ ...error.refusal, onlyNotice: true })
+        }
+        throw error
+      })
       if (retiredBackup) {
         progress.backups.push(retiredBackup)
       }
