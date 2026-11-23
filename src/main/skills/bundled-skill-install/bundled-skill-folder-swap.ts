@@ -67,10 +67,38 @@ export async function retireBundledSkillPlacement(
     throw error
   }
   if (!(await verify(old))) {
-    return backUpBundledSkillPath(filesystem, old, backupPath, 'moved-aside')
+    try {
+      return await backUpBundledSkillPath(filesystem, old, backupPath, 'moved-aside')
+    } catch (error) {
+      if (!forwardTo && error instanceof BundledSkillBackupRefusedError) {
+        await putBackRefusedCopy(filesystem, old, path)
+      }
+      throw error
+    }
   }
   await removeBundledSkillSibling(filesystem, old)
   return undefined
+}
+
+/**
+ * A refused retirement with no forwarding link puts the edited copy back where the user left it,
+ * so no plan has to rediscover it. Best effort, like Replace's rollback: a check, then a rename.
+ * Throws the in-place refusal on success; returns when the copy must stay at `old`.
+ */
+async function putBackRefusedCopy(
+  filesystem: BundledSkillFilesystem,
+  old: string,
+  path: string
+): Promise<void> {
+  try {
+    if ((await filesystem.stat(path))?.kind !== 'missing') {
+      return
+    }
+    await filesystem.rename(old, path)
+  } catch {
+    return
+  }
+  throw new BundledSkillBackupRefusedError({ path, source: 'in-place' })
 }
 
 /** Backups stay outside skill roots (agents would load them) and projects (they would pollute repos). */
