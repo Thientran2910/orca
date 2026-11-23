@@ -225,6 +225,7 @@ describe('interrupted swaps', () => {
     const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
     const done = result.skills[0].ops[0]
     expect(done.status).toBe('done')
+    expect(done.backupPaths).toEqual([done.backupPath])
     expect(await readFile(join(done.backupPath ?? '', 'SKILL.md'), 'utf8')).toBe(
       OLD_TEXT + 'Local edit\n'
     )
@@ -355,6 +356,7 @@ describe('cross-drive backup refusal', () => {
       kind: 'keep',
       status: 'failed',
       error: 'EXDEV',
+      contentApplied: true,
       backupRefusal: { path: oldPath, source: 'leftover' }
     })
     expect((await previewBundledSkillInstall(input)).planDigest).toBe(recovery.planDigest)
@@ -425,6 +427,14 @@ describe('cross-drive backup refusal', () => {
         expect(await snapshot(former)).toBe('missing')
       }
 
+      if (placement === 'former root') {
+        // Known limit: nothing rediscovers a former root's retained copy; later runs must leave it be.
+        await previewAndInstall(input)
+        await previewAndInstall(input)
+        expect(await readFile(join(oldPath, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT + 'Late edit\n')
+        expect(await readdir(backups)).toEqual([])
+        return
+      }
       const recovery = await previewBundledSkillInstall({ ...input, installedOnly: true })
       expect(bundledSkillNudgeEntries(recovery)).toHaveLength(1)
       expect(recovery.skills[0].ops.find((op) => op.path === former)?.cleanup).toMatchObject([
@@ -436,6 +446,125 @@ describe('cross-drive backup refusal', () => {
       expect(await readFile(join(backups, backup, 'SKILL.md'), 'utf8')).toBe(
         OLD_TEXT + 'Late edit\n'
       )
+    }
+  )
+})
+
+function refusingFilesystem(
+  backups: string,
+  refuse: (source: string) => boolean,
+  beforeRefusal: () => Promise<void> = async () => undefined
+): BundledSkillFilesystem {
+  return {
+    ...nativeBundledSkillFilesystem,
+    rename: async (source, target) => {
+      if (dirname(target) === backups && refuse(source)) {
+        await beforeRefusal()
+        throw Object.assign(new Error('cross-device rename'), { code: 'EXDEV' })
+      }
+      return nativeBundledSkillFilesystem.rename(source, target)
+    }
+  }
+}
+
+describe('refusal outcomes', () => {
+  it('reports a backup that finished before a later refusal', async () => {
+    const home = await makeSkillHome()
+    const leftover = join(dirname(home.shared), `.${NAME}.orca-old-earlier`)
+    await writeCopy(home.shared, OLD_TEXT + 'Local edit\n')
+    await writeCopy(leftover, OLD_TEXT + 'Earlier edit\n')
+    const backups = join(home.home, '.agents', '.orca-skill-backups')
+    const input = serviceInput(home, { agents: [], force: [home.shared] })
+    const plan = await previewBundledSkillInstall(input)
+    expect(plan.skills[0].ops[0].cleanup).toMatchObject([{ path: leftover, action: 'backup' }])
+    const filesystem = refusingFilesystem(backups, (source) => source === home.shared)
+    const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    const [backup] = await readdir(backups)
+    expect(result.skills[0].ops[0]).toEqual({
+      path: home.shared,
+      kind: 'replace',
+      status: 'failed',
+      error: 'EXDEV',
+      backupPath: join(backups, backup),
+      backupPaths: [join(backups, backup)],
+      backupRefusal: { path: home.shared, source: 'in-place' }
+    })
+    expect(await readFile(join(backups, backup, 'SKILL.md'), 'utf8')).toBe(
+      OLD_TEXT + 'Earlier edit\n'
+    )
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT + 'Local edit\n')
+  })
+
+  it('does not call an EXDEV outside the backup move a refusal', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, OLD_TEXT)
+    const filesystem: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      rename: async (source, target) => {
+        if (source.includes('.orca-stage-') && target === home.shared) {
+          throw Object.assign(new Error('cross-device rename'), { code: 'EXDEV' })
+        }
+        return nativeBundledSkillFilesystem.rename(source, target)
+      }
+    }
+    const input = serviceInput(home, { agents: [] })
+    const plan = await previewBundledSkillInstall(input)
+    expect(plan.skills[0].ops[0].kind).toBe('update')
+    const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    expect(result.skills[0].ops[0]).toEqual({
+      path: home.shared,
+      kind: 'update',
+      status: 'failed',
+      error: 'EXDEV'
+    })
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT)
+  })
+
+  it.each(['stable', 'changed'] as const)(
+    'links to a %s current copy only if it is rechecked after its cleanup is refused',
+    async (parent) => {
+      const home = await makeSkillHome()
+      const leftover = join(dirname(home.shared), `.${NAME}.orca-old-earlier`)
+      await writeCopy(home.shared, NEW_TEXT)
+      await writeCopy(leftover, OLD_TEXT + 'Earlier edit\n')
+      const backups = join(home.home, '.agents', '.orca-skill-backups')
+      const digests = join(home.home, '.agents', '.orca-skill-digests')
+      const input = serviceInput(home, { agents: ['claude'] })
+      const plan = await previewBundledSkillInstall(input)
+      expect(plan.skills[0].ops.map((op) => [op.path, op.kind])).toEqual([
+        [home.shared, 'keep'],
+        [home.claude, 'link']
+      ])
+      const filesystem = refusingFilesystem(
+        backups,
+        (source) => source === leftover,
+        async () => {
+          if (parent === 'changed') {
+            await writeFile(join(home.shared, 'SKILL.md'), 'changed after planning\n')
+          }
+        }
+      )
+      const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+      const [shared, link] = result.skills[0].ops
+      expect(shared).toMatchObject({
+        path: home.shared,
+        kind: 'keep',
+        status: 'failed',
+        error: 'EXDEV',
+        backupRefusal: { path: leftover, source: 'leftover' }
+      })
+      expect(await readFile(join(leftover, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT + 'Earlier edit\n')
+      if (parent === 'stable') {
+        expect(shared.contentApplied).toBe(true)
+        expect(link.status).toBe('done')
+        expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
+        expect(await readdir(join(digests, NAME))).toEqual([plan.skills[0].digest])
+      } else {
+        expect(shared.contentApplied).toBeUndefined()
+        expect(link.status).toBe('skipped')
+        expect(await snapshot(home.claude)).toBe('missing')
+        expect(await snapshot(digests)).toBe('missing')
+      }
     }
   )
 })

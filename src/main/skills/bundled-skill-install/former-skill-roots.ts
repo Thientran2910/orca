@@ -8,7 +8,6 @@ import {
 } from './bundled-skill-cloud-state'
 import { classifyBundledSkillPath } from './bundled-skill-classification'
 import type { BundledSkillPlanInput } from './bundled-skill-plan'
-import { recoverySiblings } from './bundled-skill-swap-recovery'
 import {
   bundledSkillPathKey,
   linkPointsAt,
@@ -80,46 +79,32 @@ export async function planFormerRootPlacements(
     digest: string
   },
   sharedRoot: BundledSkillTargetRoot
-): Promise<{ previous: NonNullable<BundledSkillOp['previous']>; recovery: BundledSkillOp[] }> {
+): Promise<NonNullable<BundledSkillOp['previous']>> {
   const { input, roots, source, digest } = context
   const { destination, filesystem, stateDirectory } = input
-  const previous: NonNullable<BundledSkillOp['previous']>[number][] = []
-  const recovery: BundledSkillOp[] = []
   if (sharedRoot.role !== 'shared' || destination.scope !== 'global') {
-    return { previous, recovery }
+    return []
   }
+  const previous: NonNullable<BundledSkillOp['previous']>[number][] = []
   for (const segments of FORMER_GLOBAL_SKILL_ROOTS) {
     const root = join(destination.homeDirectory, ...segments)
-    if ((await filesystem.stat(root))?.kind !== 'directory') {
-      continue
-    }
-    const rootRealPath = await plainFormerRootRealPath(input, roots, segments)
-    if (!rootRealPath || !(await filesystem.canWrite(rootRealPath))) {
-      continue
-    }
+    let rootRealPath: string | null | undefined
     for (const name of [source.name, ...(source.aliases ?? [])]) {
       const path = join(root, name)
-      const keys = stateKeysFor(path, join(rootRealPath, name))
-      if (await hasPendingCloudTransaction(stateDirectory, keys)) {
-        continue
-      }
       const { folderClass, observed } = await classifyBundledSkillPath(
         filesystem,
         path,
         source,
         digest
       )
-      const { cleanup } = await recoverySiblings(
-        filesystem,
-        { ...source, name },
-        digest,
-        { path: root },
-        false,
-        { oldOnly: true }
-      )
-      if (cleanup.length > 0) {
-        recovery.push({ path, kind: 'keep', role: 'agent', agents: [], observed, cleanup })
+      if (observed.kind === 'absent' || observed.kind === 'unreadable') {
+        continue
       }
+      rootRealPath ??= await plainFormerRootRealPath(input, roots, segments)
+      if (!rootRealPath) {
+        break
+      }
+      const keys = stateKeysFor(path, join(rootRealPath, name))
       const owned =
         observed.kind === 'link'
           ? await linkPointsAt(
@@ -132,11 +117,13 @@ export async function planFormerRootPlacements(
             !(await hasCloudReceipt(stateDirectory, keys))
       if (
         owned &&
-        !(await linkedFromTarget(input, roots, name, [path, join(rootRealPath, name)]))
+        !(await linkedFromTarget(input, roots, name, [path, join(rootRealPath, name)])) &&
+        !(await hasPendingCloudTransaction(stateDirectory, keys)) &&
+        (await filesystem.canWrite(rootRealPath))
       ) {
         previous.push({ path, observed })
       }
     }
   }
-  return { previous, recovery }
+  return previous
 }

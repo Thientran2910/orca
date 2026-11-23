@@ -127,6 +127,8 @@ export type BundledSkillOpOutcome = {
   error?: string
   /** Where Replace or a non-released old copy was moved. */
   backupPath?: string
+  /** Every backup this op completed, in order; `backupPath` is the first, for older readers. */
+  backupPaths?: string[]
   /** The new copy is in, but edits saved during the swap could not be backed up and remain here. */
   strandedPath?: string
   /** The primary operation completed before a later check or backup failed. */

@@ -205,7 +205,7 @@ async function planTarget(
       ? files('update')
       : decision
   const keepsFormer = decided.kind === 'keep' && former.previous.every((entry) => entry.retain)
-  const previous = [...(keepsFormer ? [] : former.previous), ...formerRoots.previous]
+  const previous = [...(keepsFormer ? [] : former.previous), ...formerRoots]
   const op =
     WRITES_SHARED_CURRENT.has(decided.kind) || decided.kind === 'copy' || decided.kind === 'link'
       ? { ...decided, ...(previous.length ? { previous } : {}) }
@@ -214,11 +214,7 @@ async function planTarget(
     op.kind === 'keep'
       ? formerLeavesBesideKeep(former.leaves, keptBesideAgentFiles(op, shared?.besideAgentFiles))
       : former.leaves
-  const result = {
-    holdsOrcaCopy: holdsOrcaCopy || formerRoots.recovery.length > 0,
-    formerInstalled: former.installed || formerRoots.recovery.length > 0,
-    leaves: [...leaves, ...formerRoots.recovery]
-  }
+  const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves }
   const writes = op.kind !== 'keep' && op.kind !== 'leave'
   if (!writes && op.cleanup.length === 0 && !op.previous?.length) {
     return { op, ...result }

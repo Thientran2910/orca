@@ -70,11 +70,18 @@ function backupFor(run: SkillRun): string {
   return bundledSkillBackupPath(run.input.destination.homeDirectory, run.entry.name)
 }
 
-async function settleCleanup(run: SkillRun, cleanup: BundledSkillCleanup) {
+/** Every backup an op completed, kept even when a later step fails or refuses. */
+type OpProgress = { backups: string[] }
+
+async function settleCleanup(run: SkillRun, cleanup: BundledSkillCleanup, progress: OpProgress) {
   await requireUnchanged(run, cleanup.path, cleanup.observed)
-  await (cleanup.action === 'delete'
-    ? removeBundledSkillSibling(run.input.filesystem, cleanup.path)
-    : backUpBundledSkillPath(run.input.filesystem, cleanup.path, backupFor(run), 'leftover'))
+  if (cleanup.action === 'delete') {
+    await removeBundledSkillSibling(run.input.filesystem, cleanup.path)
+    return
+  }
+  progress.backups.push(
+    await backUpBundledSkillPath(run.input.filesystem, cleanup.path, backupFor(run), 'leftover')
+  )
 }
 
 /** The moved-aside copy held edits that could not be backed up; they stay at `path`. */
@@ -114,25 +121,33 @@ function requireLinkTarget(op: BundledSkillOp): string {
   return op.linkTarget
 }
 
-async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string | undefined> {
+function isOwnNameKeep(run: SkillRun, op: BundledSkillOp): boolean {
+  return op.kind === 'keep' && basename(op.path) === run.source.name
+}
+
+async function applyContent(
+  run: SkillRun,
+  op: BundledSkillOp,
+  progress: OpProgress
+): Promise<string | undefined> {
   const { filesystem } = run.input
   const files = [{ path: 'SKILL.md', text: run.source.text }]
   const verify = verifier(run, op.path, op.observed)
   for (const cleanup of op.cleanup) {
     if (cleanup.action === 'backup') {
-      await settleCleanup(run, cleanup)
+      await settleCleanup(run, cleanup, progress)
     }
   }
   for (const cleanup of op.cleanup) {
     if (cleanup.action === 'delete') {
-      await settleCleanup(run, cleanup)
+      await settleCleanup(run, cleanup, progress)
     }
   }
   switch (op.kind) {
     case 'keep':
       // Former placements and agent links rely on the skill's own copy; report it if it changed.
       // A former name's recovery keep is relied on by nothing, and its retirement may run first.
-      if (basename(op.path) === run.source.name) {
+      if (isOwnNameKeep(run, op)) {
         await requireUnchanged(run, op.path, op.observed)
       }
       return undefined
@@ -179,12 +194,21 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
   }
 }
 
-async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<BundledSkillOpOutcome> {
+type AppliedOp = {
+  outcome: BundledSkillOpOutcome
+  /** This op's location was checked to hold the planned bytes, so it can back links and a marker. */
+  verified: boolean
+}
+
+async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<AppliedOp> {
   const { path, kind, reason } = op
-  let backupPath: string | undefined
+  const progress: OpProgress = { backups: [] }
   let contentApplied = false
   try {
-    backupPath = await applyContent(run, op)
+    const primaryBackup = await applyContent(run, op, progress)
+    if (primaryBackup) {
+      progress.backups.push(primaryBackup)
+    }
     contentApplied = true
     for (const previous of op.previous ?? []) {
       if (previous.retain) {
@@ -198,14 +222,19 @@ async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<BundledSkillO
         (path) => verifier(run, path, previous.observed)(),
         backupFor(run)
       )
-      backupPath ??= retiredBackup
+      if (retiredBackup) {
+        progress.backups.push(retiredBackup)
+      }
     }
     return {
-      path,
-      kind,
-      status: 'done',
-      ...(reason && { reason }),
-      ...(backupPath && { backupPath })
+      outcome: {
+        path,
+        kind,
+        status: 'done',
+        ...(reason && { reason }),
+        ...backupFields(progress.backups)
+      },
+      verified: kind !== 'keep' || isOwnNameKeep(run, op)
     }
   } catch (error) {
     const strandedPath = error instanceof BundledSkillStrandedError ? error.path : undefined
@@ -214,45 +243,70 @@ async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<BundledSkillO
         ? error.cause
         : error
     if (error instanceof BundledSkillReplaceRestoreError) {
-      backupPath = error.backupPath
+      progress.backups.push(error.backupPath)
+    }
+    // A stranded old copy was moved aside only after the new copy was published.
+    contentApplied ||= Boolean(strandedPath)
+    // A cleanup failing beside an already-current copy leaves that copy in place; prove it still is.
+    if (!contentApplied && isOwnNameKeep(run, op)) {
+      contentApplied = await verifier(run, op.path, op.observed)().catch(() => false)
     }
     const partial = {
       path,
       kind,
-      ...((contentApplied || strandedPath) && { contentApplied: true as const }),
+      ...(contentApplied && { contentApplied: true as const }),
       ...(strandedPath && { strandedPath }),
-      ...(backupPath && { backupPath })
+      ...backupFields(progress.backups)
     }
+    const verified = contentApplied && (kind !== 'keep' || isOwnNameKeep(run, op))
     if (failure instanceof BundledSkillChangedError) {
-      return { ...partial, status: 'changed' }
+      return { outcome: { ...partial, status: 'changed' }, verified }
     }
     if (failure instanceof BundledSkillBackupRefusedError) {
       return {
-        ...partial,
-        status: 'failed',
-        error: 'EXDEV',
-        backupRefusal: failure.refusal
+        outcome: { ...partial, status: 'failed', error: 'EXDEV', backupRefusal: failure.refusal },
+        verified
       }
     }
-    return { ...partial, status: 'failed', error: filesystemErrorCode(failure) }
+    return {
+      outcome: { ...partial, status: 'failed', error: filesystemErrorCode(failure) },
+      verified
+    }
   }
+}
+
+/** `backupPath` stays the first for older readers; `backupPaths` lists every completed backup. */
+function backupFields(backups: readonly string[]) {
+  return backups.length > 0 ? { backupPath: backups[0], backupPaths: [...backups] } : {}
 }
 
 /** Applies one skill's ops in order, then records its marker if this build's bytes are on disk. */
 async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
   const statuses = new Map<string, BundledSkillOpOutcome['status']>()
+  const verified = new Set<string>()
   const ops: BundledSkillOpOutcome[] = []
   for (const op of run.entry.ops) {
-    const outcome: BundledSkillOpOutcome =
+    const applied: AppliedOp =
       op.requires && statuses.get(op.requires) !== 'done'
-        ? { path: op.path, kind: op.kind, status: 'skipped' }
+        ? { outcome: { path: op.path, kind: op.kind, status: 'skipped' }, verified: false }
         : await applyOp(run, op)
+    const { outcome } = applied
     statuses.set(op.path, outcome.contentApplied ? 'done' : outcome.status)
+    if (applied.verified) {
+      verified.add(op.path)
+    }
     ops.push(outcome)
   }
+  // Only bytes checked on disk during this run count: a planned current copy may have changed.
   if (
-    holdsCurrentBundledSkillCopy(run.entry) ||
-    run.entry.ops.some((op) => op.content === 'files' && statuses.get(op.path) === 'done')
+    run.entry.ops.some(
+      (op) =>
+        verified.has(op.path) &&
+        (op.content === 'files' ||
+          (op.kind === 'keep' &&
+            op.observed.kind === 'folder' &&
+            op.observed.skillDigest === run.entry.digest))
+    )
   ) {
     await recordOrcaCopy(run.input, run.entry)
   }

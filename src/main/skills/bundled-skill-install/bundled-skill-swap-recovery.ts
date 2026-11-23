@@ -14,9 +14,8 @@ export async function recoverySiblings(
   filesystem: BundledSkillFilesystem,
   source: BundledSkillSource,
   digest: string,
-  root: Pick<BundledSkillTargetRoot, 'path'>,
-  targetIsAbsent: boolean,
-  { oldOnly = false }: { oldOnly?: boolean } = {}
+  root: BundledSkillTargetRoot,
+  targetIsAbsent: boolean
 ): Promise<{ restoreFrom?: BundledSkillOp['restoreFrom']; cleanup: BundledSkillCleanup[] }> {
   const listing = (await filesystem.listEntries(root.path)) ?? []
   const cleanup: BundledSkillCleanup[] = []
@@ -24,7 +23,7 @@ export async function recoverySiblings(
   for (const entry of [...listing].sort((left, right) => (left.name < right.name ? -1 : 1))) {
     const kind = bundledSkillSiblingKind(source.name, entry.name)
     const path = join(root.path, entry.name)
-    if (!kind || (oldOnly && kind !== 'old')) {
+    if (!kind) {
       continue
     }
     const classified = await classifyBundledSkillPath(filesystem, path, source, digest, true)
