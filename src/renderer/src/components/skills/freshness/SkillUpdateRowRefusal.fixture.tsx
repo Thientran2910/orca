@@ -6,8 +6,10 @@ import type {
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillPlanSkillSummary } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { SkillUpdateRow } from './SkillUpdateRow'
+import { skillBackupLocation } from './skill-backup-location'
 
 const SKILLS = '/Users/sam/.agents/skills'
+const BACKUP = skillBackupLocation('/Users/sam', { kind: 'local' })
 
 function row(name: string, ops: BundledSkillOpOutcome[]): React.JSX.Element {
   const skill: BundledSkillPlanSkillSummary = {
@@ -17,7 +19,15 @@ function row(name: string, ops: BundledSkillOpOutcome[]): React.JSX.Element {
     upToDate: false
   }
   const outcome: BundledSkillOutcome = { name, status: 'ran', ops }
-  return <SkillUpdateRow skill={skill} phase="result" outcome={outcome} showLocations={false} />
+  return (
+    <SkillUpdateRow
+      skill={skill}
+      phase="result"
+      outcome={outcome}
+      showLocations={false}
+      backup={BACKUP}
+    />
+  )
 }
 
 const refused = (
