@@ -1,6 +1,5 @@
 import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
-import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { isLocalEnvironmentSelector } from '../hosts/local-environment-selector'
@@ -197,7 +196,7 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
         `${name}: not installed, so skipped. Install it with: orca skills install --skill ${name}`
     )
     const backupFolder = collapseHomePath(
-      join(plan.homeDirectory, '.agents', '.orca-skill-backups'),
+      bundledSkillBackupDirectory(plan.homeDirectory),
       plan.homeDirectory
     )
     const forceHint = hasReplaceableLeave(plan)
@@ -261,7 +260,7 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
         describeOutcomeOpLines(
           outcome.name,
           op,
-          bundledSkillBackupDirectory(plan.homeDirectory),
+          backupFolder,
           summary.skills[index].text === 'Needs attention'
         )
       )

@@ -84,7 +84,7 @@ export function describeOutcomeOpLines(
   return [
     ...(refusal ? [`  ${describeRefusal(refusal, backupFolder)}`] : []),
     ...(text ? [`  ${op.path}: ${text}`] : []),
-    ...bundledSkillOpBackupPaths(op).map((path) => `  ${op.path}: Backed up to ${path}`)
+    ...bundledSkillOpBackupPaths(op).map((path) => `  ${op.path}: Old copy moved to ${path}`)
   ]
 }
 
