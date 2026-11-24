@@ -190,7 +190,7 @@ function beginRecovery(options: RecoveryOptions = {}) {
           const run = createAutomationRun(
             { state, flush() {}, recordManualRun() {}, getWorkspaceDisplayName: () => null },
             automation,
-            Date.now(),
+            2,
             'manual',
             undefined,
             'queued'
