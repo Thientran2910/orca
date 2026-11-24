@@ -1,7 +1,6 @@
 import { RuntimePtyExitWorkerObservation } from './pty-exit-worker-observation'
 import type { TerminalModelWait } from '../../../agent-hooks/server/server-model-wait'
 import {
-  claudeModelWaitLastSeen,
   claudeReplyScreen,
   claudeToolRunsOnScreen,
   claudeTurnDoneOnScreen
@@ -47,7 +46,7 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
     const db = this._orchestrationDb
     const target = this.modelWaitTarget(handle, paneKey)
     if (db && target) {
-      const lastSeen = claudeModelWaitLastSeen(after)
+      // No screen text goes into the mail: any line picked from it can be the worker's own output.
       reportWorkerModelWait(
         db,
         target,
@@ -55,8 +54,7 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
           from: handle,
           kind: 'waiting',
           stretchKey: `${wait.turnKey}:${wait.since}`,
-          waitedMs: Date.now() - wait.since,
-          ...(lastSeen ? { lastSeen } : {})
+          waitedMs: Date.now() - wait.since
         },
         this.workerTurnStopReportDeps
       )
