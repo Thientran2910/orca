@@ -10,6 +10,7 @@ import type { AutomationBotTarget } from '../../automation-bot-target'
 import type { Bot } from '../../bot-types'
 import { botAutomationSetup, type BotAgentSetup } from '../../bots/bot-agent-setup'
 import { parseStructuredLaunchSeedOptions } from '../../native-chat/input/session-options/native-chat-session-option-defaults'
+import { ChoicePatch } from '../../rpc-contract/agent-launch/agent-launch-settings-params'
 
 export type AutomationModelRecoveryInput = {
   id: string
@@ -27,11 +28,19 @@ export type AutomationModelRecoveryProjection = AutomationModelRecoverySelection
   setupFingerprint: string
 }
 
+const recoveryModel = ChoicePatch.shape.model
+  .unwrap()
+  .refine((model) => model === null || parseStructuredLaunchSeedOptions({ model })?.model === model)
+
 const recoveryProjection = z.object({
-  model: z.string().nullable(),
+  model: recoveryModel,
   permission: z.union([z.enum(AGENT_CHAT_PERMISSION_MODES), z.literal('own'), z.null()]),
   setupFingerprint: z.string()
 })
+
+export function isReadableAutomationRecoveryModel(model: string | null): boolean {
+  return recoveryModel.safeParse(model).success
+}
 
 export function readAutomationModelRecoveryProjection(
   value: unknown,
@@ -45,8 +54,7 @@ export function readAutomationModelRecoveryProjection(
   const { model, permission, setupFingerprint } = parsed.data
   if (
     setupFingerprint !== expectedSetup ||
-    newChatPermissionMode(agent, permission) !== permission ||
-    (model !== null && parseStructuredLaunchSeedOptions({ model })?.model !== model)
+    newChatPermissionMode(agent, permission) !== permission
   ) {
     return undefined
   }

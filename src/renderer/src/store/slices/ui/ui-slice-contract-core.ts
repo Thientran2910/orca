@@ -15,6 +15,7 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type {
+  AutomationPageOwnerBinding,
   AutomationRunPageOrigin,
   AutomationsPageLocation,
   AutomationsPageVisitMode
@@ -25,13 +26,11 @@ export type PendingAutomationRunNavigation = {
   automationId: string
   runId: string | null
   hostId?: ExecutionHostId
-  ownerKey?: string
-  rowKey?: string
   /** With runId null: open the automation's run history instead of its detail. */
   paneTab?: 'overview' | 'runs'
   /** With a runId: where Escape returns; defaults to the automation detail. */
   origin?: AutomationRunPageOrigin
-}
+} & AutomationPageOwnerBinding
 
 export type PendingSidebarWorktreeReveal = {
   rowKey?: string

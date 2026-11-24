@@ -41,15 +41,16 @@ export function automationsRunPageFocusKey(runId: string, rowKey: string | undef
 export function automationsPageNotFoundLocation(
   notFound: AutomationRunNotFound
 ): AutomationsPageLocation {
-  return notFound.runId
+  const { automationId, hostId, ownerKey, rowKey, runId, origin } = notFound
+  const target = { automationId, hostId, ...(ownerKey ? { ownerKey, rowKey } : {}) }
+  return runId
     ? {
         page: 'run',
-        automationId: notFound.automationId,
-        runId: notFound.runId,
-        hostId: notFound.hostId,
-        origin: notFound.origin ?? 'automation'
+        ...target,
+        runId,
+        origin: origin ?? 'automation'
       }
-    : { page: 'detail', automationId: notFound.automationId, hostId: notFound.hostId }
+    : { page: 'detail', ...target }
 }
 
 /** Page identity for back/forward history and focus, plus the Run now busy state. */

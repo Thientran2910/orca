@@ -120,6 +120,7 @@ export function createAutomationsPageNavigation({
           automationId: location.automationId,
           runId: null,
           hostId: location.hostId,
+          ...(location.ownerKey ? { ownerKey: location.ownerKey, rowKey: location.rowKey } : {}),
           paneTab: location.page === 'automationRuns' ? 'runs' : 'overview'
         })
         return
@@ -129,6 +130,7 @@ export function createAutomationsPageNavigation({
           automationId: location.automationId,
           runId: location.runId,
           hostId: location.hostId,
+          ...(location.ownerKey ? { ownerKey: location.ownerKey, rowKey: location.rowKey } : {}),
           origin: location.origin
         })
     }

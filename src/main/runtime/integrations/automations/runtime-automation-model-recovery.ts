@@ -2,6 +2,7 @@ import type { AutomationBotTarget } from '../../../../shared/automations/automat
 import {
   automationModelRecoverySetupFingerprint,
   automationModelRecoveryTarget,
+  isReadableAutomationRecoveryModel,
   type AutomationModelRecoveryInput,
   type AutomationModelRecoveryProjection,
   type AutomationModelRecoveryResult,
@@ -12,7 +13,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { isFailedAutomationRunModel } from '../../../../shared/automations/history/automation-run-model-failure'
 import { BotLaunchSchema } from '../../../../shared/bots/bot-launch'
-import { botAutomationSetup } from '../../../../shared/bots/bot-agent-setup'
+import { botAutomationSetup, botOnSetup } from '../../../../shared/bots/bot-agent-setup'
 import { resolveBotAutomationRunTarget } from '../../../automations/bot-run-target'
 import {
   botBackgroundStartOptions,
@@ -46,9 +47,13 @@ export function readAutomationRecoverySelection(
   }
   const settings = store.getSettings()
   const setup = botAutomationSetup(target, bot)
+  const model = botBackgroundStartOptions(settings, setup).model ?? null
+  if (!isReadableAutomationRecoveryModel(model)) {
+    return undefined
+  }
   return {
     setupFingerprint: automationModelRecoverySetupFingerprint(setup, bot),
-    model: botBackgroundStartOptions(settings, setup).model ?? null,
+    model,
     permission: automationRecoveryPermission(settings, {
       ...setup,
       permissionMode: bot.permissionMode
@@ -108,7 +113,7 @@ export async function recoverAutomationModel(
       return { status: 'changed' }
     }
     const { model: effectiveModel, ...options } = botBackgroundStartOptions(settings, resolved.bot)
-    if (effectiveModel === model) {
+    if (effectiveModel === model || !isReadableAutomationRecoveryModel(effectiveModel ?? null)) {
       return { status: 'changed' }
     }
     // An explicit Settings model owns its options. Options without a model can apply to the new choice.
@@ -120,6 +125,8 @@ export async function recoverAutomationModel(
       ...(keptOptions && Object.keys(keptOptions).length > 0 ? { options: keptOptions } : {})
     })
     const bot = { ...target, agentSetup: { agent: resolved.bot.agent, launch } }
+    const savedBot = botOnSetup(resolved.bot, bot.agentSetup)
+    const { model: _savedModel, ...savedOptions } = botBackgroundStartOptions(settings, savedBot)
     const expectedSavedTarget = automationModelRecoveryTarget(
       bot,
       resolved.bot,
@@ -154,7 +161,18 @@ export async function recoverAutomationModel(
       ) {
         return { status: 'saved', rerun: 'skipped' }
       }
-      newerModel = botBackgroundStartOptions(currentSettings, runTarget.bot).model !== model
+      const { model: currentModel, ...currentOptions } = botBackgroundStartOptions(
+        currentSettings,
+        runTarget.bot
+      )
+      if (
+        !isReadableAutomationRecoveryModel(currentModel ?? null) ||
+        Object.keys(savedOptions).length !== Object.keys(currentOptions).length ||
+        Object.entries(savedOptions).some(([key, value]) => currentOptions[key] !== value)
+      ) {
+        return { status: 'saved', rerun: 'skipped' }
+      }
+      newerModel = currentModel !== model
     } catch {
       return { status: 'saved', rerun: 'skipped' }
     }

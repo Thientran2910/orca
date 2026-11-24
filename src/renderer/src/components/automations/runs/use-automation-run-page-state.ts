@@ -165,16 +165,12 @@ export function useAutomationRunPageState({
         setAwaitingHistorySelection(true)
         return
       }
-      setSelectedId(pending.automationId)
+      if (!pending.ownerKey) {
+        setSelectedId(pending.automationId)
+      }
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
-      setRunNotFound({
-        kind: 'automation',
-        automationId: pending.automationId,
-        runId: pending.runId,
-        hostId: pending.hostId,
-        origin: pending.origin
-      })
+      setRunNotFound({ ...pending, kind: 'automation' })
       setPageView('run')
       return
     }
@@ -242,13 +238,7 @@ export function useAutomationRunPageState({
     }
     setSelectedAutomationRunPageId(null)
     setPendingAutomationRunNavigation(null)
-    setRunNotFound({
-      kind: 'run',
-      automationId: pending.automationId,
-      runId: pending.runId,
-      hostId: pending.hostId,
-      origin: pending.origin
-    })
+    setRunNotFound({ ...pending, kind: 'run' })
     setPageView('run')
   }, [
     automations,

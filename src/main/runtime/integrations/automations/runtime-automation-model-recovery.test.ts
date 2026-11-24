@@ -13,6 +13,7 @@ import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   type AgentChatPermissionMode
 } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch/choices/agent-launch-choices'
 import {
   seededPermissionMode,
   structuredLaunchSeedOptions
@@ -25,8 +26,9 @@ import {
   createAutomationRun,
   listAutomationRuns
 } from '../../../persistence/scheduling-automations/automation-run-operations'
+import { updateAutomation } from '../../../persistence/scheduling-automations/automation-definition-update'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
-import { botStartPermission } from '../../../bots/bot-start-options'
+import { botBackgroundStartOptions, botStartPermission } from '../../../bots/bot-start-options'
 import {
   readAutomationRecoverySelection,
   recoverAutomationModel
@@ -38,6 +40,7 @@ type RecoveryOptions = {
   destinationBeforeHandler?: AutomationBotTarget['resultsTo']
   folderMoveBeforeHandler?: string
   settingsModel?: string
+  settingsOptions?: Record<string, string>
   input?: Partial<AutomationModelRecoveryInput>
   refuseRerun?: boolean
   inheritPermission?: true
@@ -126,7 +129,14 @@ function beginRecovery(options: RecoveryOptions = {}) {
     ...state.settings,
     botsEnabled: true,
     ...(options.settingsModel
-      ? { agentLaunchChoices: { codex: { model: options.settingsModel } } }
+      ? {
+          agentLaunchChoices: normalizeAgentLaunchChoices({
+            codex: {
+              model: options.settingsModel,
+              options: options.settingsOptions
+            }
+          })
+        }
       : {})
   }
   const writePermission = (permission: AgentChatPermissionMode) =>
@@ -148,7 +158,7 @@ function beginRecovery(options: RecoveryOptions = {}) {
     automation.bot!,
     bot,
     folder.folderPath,
-    readSelection()?.permission ?? null
+    readSelection()?.permission ?? 'ask'
   )
   const folders = new FolderWorkspacePersistenceOperations({
     state,
@@ -208,6 +218,8 @@ function beginRecovery(options: RecoveryOptions = {}) {
     recovery: recover(),
     recover,
     readSelection,
+    persistedSettingsModel: () => state.settings.agentLaunchChoices?.codex?.model,
+    backgroundSettings: () => botBackgroundStartOptions(getSettings(), bot),
     queued: () =>
       listAutomationRuns(state, automation.id).filter((run) => run.status === 'pending'),
     createPermission: () =>
@@ -224,6 +236,15 @@ function beginRecovery(options: RecoveryOptions = {}) {
     rejectSave: persisted.reject,
     get target() {
       return automation.bot
+    },
+    editWithOwnerWriter: (target: AutomationBotTarget) => {
+      state.automations = [automation]
+      automation = updateAutomation(
+        { state, storageAuthority: 'desktop', flush() {}, recordCreated() {} },
+        automation.id,
+        { bot: target },
+        { expectedOwner: { selector: { kind: 'self' } } }
+      )
     },
     editTarget: (bot: AutomationBotTarget) => {
       automation = { ...automation, bot }
@@ -258,6 +279,18 @@ it('shows the owner Settings model, refuses the same choice and queues a differe
   different.acceptSave()
   await expect(different.recovery).resolves.toEqual({ status: 'queued', runId: 'queued' })
   expect(different.readSelection()).toMatchObject({ model: 'replacement', permission: 'ask' })
+})
+
+it('withholds a corrupt persisted Settings model from recovery reads and direct recovery', async () => {
+  const settingsModel = 'sample\u0000corrupt'
+  const pending = beginRecovery({ settingsModel })
+  expect(pending.persistedSettingsModel()).toBe(settingsModel)
+  expect(pending.backgroundSettings().model).toBe(settingsModel)
+  expect(pending.readSelection()).toBeUndefined()
+  pending.acceptSave()
+  await expect(pending.recovery).resolves.toEqual({ status: 'changed' })
+  expect(pending.target?.agentSetup).toBeUndefined()
+  expect(pending.queued()).toHaveLength(0)
 })
 
 it('fences changed inherited permission before and after save, but honors a supported bot override', async () => {
@@ -391,4 +424,42 @@ it('admits a rerun with a newer model saved for the same destination', async () 
     newerModel: true
   })
   expect(pending.target?.agentSetup?.launch?.model).toBe('newer-model')
+})
+
+it('skips automatic rerun when a newer owner save changes effective non-model settings', async () => {
+  const inheritedTarget = { botId: 'bot-1', runsIn: 'new', resultsTo: 'none' } as const
+  const changed = beginRecovery({ settingsModel: 'model-c', settingsOptions: { effort: 'high' } })
+  expect(changed.target?.agentSetup?.launch).toEqual({ model: 'replacement' })
+  changed.editWithOwnerWriter(inheritedTarget)
+  expect(changed.target).toEqual(inheritedTarget)
+  expect(changed.backgroundSettings()).toEqual({ model: 'model-c', effort: 'high' })
+  changed.acceptSave()
+  await expect(changed.recovery).resolves.toEqual({ status: 'saved', rerun: 'skipped' })
+  expect(changed.target).toEqual(inheritedTarget)
+  expect(changed.queued()).toHaveLength(0)
+
+  const explicit = beginRecovery({ settingsModel: 'model-c', settingsOptions: { effort: 'high' } })
+  explicit.editWithOwnerWriter({
+    ...inheritedTarget,
+    agentSetup: { agent: 'codex', launch: { model: 'model-c' } }
+  })
+  explicit.acceptSave()
+  await expect(explicit.recovery).resolves.toEqual({
+    status: 'queued',
+    runId: 'queued',
+    newerModel: true
+  })
+  expect(explicit.queued().map((run) => run.id)).toEqual(['queued'])
+
+  const inherited = beginRecovery({ settingsModel: 'model-c' })
+  inherited.editWithOwnerWriter(inheritedTarget)
+  expect(inherited.backgroundSettings()).toEqual({ model: 'model-c' })
+  inherited.acceptSave()
+  await expect(inherited.recovery).resolves.toEqual({
+    status: 'queued',
+    runId: 'queued',
+    newerModel: true
+  })
+  expect(inherited.target).toEqual(inheritedTarget)
+  expect(inherited.queued().map((run) => run.id)).toEqual(['queued'])
 })

@@ -5,7 +5,10 @@ export type AutomationPaneTab = 'overview' | 'runs'
 export type AutomationsPageView = 'automations' | 'runs' | 'run'
 
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import type { AutomationRunPageOrigin } from '../../store/slices/ui/automations-page-location'
+import type {
+  AutomationPageOwnerBinding,
+  AutomationRunPageOrigin
+} from '../../store/slices/ui/automations-page-location'
 
 export type {
   AutomationRunPageOrigin,
@@ -20,7 +23,7 @@ export type AutomationRunNotFound = {
   runId: string | null
   hostId?: ExecutionHostId
   origin?: AutomationRunPageOrigin
-}
+} & AutomationPageOwnerBinding
 
 /** Run now was requested here; the button stays busy until the new run is listed. */
 export type AutomationRunNowPending = {
