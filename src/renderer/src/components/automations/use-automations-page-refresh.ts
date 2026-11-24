@@ -64,7 +64,9 @@ export function useAutomationsPageRefresh({
     isLoading,
     automationHostTargetKey,
     setRelativeNow,
-    runHistoryReloadToken
+    runHistoryReloadToken,
+    awaitingHistorySelection,
+    setAwaitingHistorySelection
   } = local
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
@@ -179,6 +181,10 @@ export function useAutomationsPageRefresh({
       if (
         useAppStore.getState().pendingAutomationRunNavigation === pendingAutomationRunNavigation
       ) {
+        if (pendingAutomationRunNavigation.ownerKey && !awaitingHistorySelection) {
+          setAwaitingHistorySelection(true)
+          return
+        }
         dropUnreachablePendingNavigation(pendingAutomationRunNavigation)
         setPageView('automations')
       }
@@ -195,11 +201,13 @@ export function useAutomationsPageRefresh({
     return () => window.clearTimeout(timer)
   }, [
     automationHostTargetKey,
+    awaitingHistorySelection,
     isLoading,
     pendingAutomationRunNavigation,
     pendingTargetKey,
     pendingListingFailures,
     refresh,
+    setAwaitingHistorySelection,
     setPageView
   ])
   useSelectedAutomationRunHistory({
@@ -211,7 +219,7 @@ export function useAutomationsPageRefresh({
     navigation: pendingAutomationRunNavigation,
     suspended: pendingAutomationRunNavigation?.ownerKey
       ? isLoading || automationHostTargetKey !== pendingTargetKey
-      : local.awaitingHistorySelection && !pendingAutomationRunNavigation,
+      : awaitingHistorySelection && !pendingAutomationRunNavigation,
     reloadToken: runHistoryReloadToken,
     acquisitionToken: local.runHistoryAcquisitionToken,
     onSettled: local.setSelectedAutomationRuns

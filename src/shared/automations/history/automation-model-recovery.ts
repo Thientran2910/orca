@@ -1,9 +1,15 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { bytesToHex } from '@noble/hashes/utils'
+import * as z from 'zod'
 import type { AgentChatPermissionChoice } from '../../agent-launch/permissions/agent-chat-permission-mode'
+import {
+  AGENT_CHAT_PERMISSION_MODES,
+  newChatPermissionMode
+} from '../../agent-launch/permissions/agent-chat-permission-mode'
 import type { AutomationBotTarget } from '../../automation-bot-target'
 import type { Bot } from '../../bot-types'
-import { botAutomationSetup } from '../../bots/bot-agent-setup'
+import { botAutomationSetup, type BotAgentSetup } from '../../bots/bot-agent-setup'
+import { parseStructuredLaunchSeedOptions } from '../../native-chat/input/session-options/native-chat-session-option-defaults'
 
 export type AutomationModelRecoveryInput = {
   id: string
@@ -15,6 +21,62 @@ export type AutomationModelRecoveryInput = {
 export type AutomationModelRecoverySelection = {
   model: string | null
   permission: AgentChatPermissionChoice | null
+}
+
+export type AutomationModelRecoveryProjection = AutomationModelRecoverySelection & {
+  setupFingerprint: string
+}
+
+const recoveryProjection = z.object({
+  model: z.string().nullable(),
+  permission: z.union([z.enum(AGENT_CHAT_PERMISSION_MODES), z.literal('own'), z.null()]),
+  setupFingerprint: z.string()
+})
+
+export function readAutomationModelRecoveryProjection(
+  value: unknown,
+  agent: BotAgentSetup['agent'],
+  expectedSetup: string
+): AutomationModelRecoverySelection | undefined {
+  const parsed = recoveryProjection.safeParse(value)
+  if (!parsed.success) {
+    return undefined
+  }
+  const { model, permission, setupFingerprint } = parsed.data
+  if (
+    setupFingerprint !== expectedSetup ||
+    newChatPermissionMode(agent, permission) !== permission ||
+    (model !== null && parseStructuredLaunchSeedOptions({ model })?.model !== model)
+  ) {
+    return undefined
+  }
+  return { model, permission }
+}
+
+function sortedLaunchOptions(launch: BotAgentSetup['launch']): [string, string][] {
+  const options = launch?.options ?? {}
+  return Object.keys(options)
+    .sort()
+    .map((key) => [key, options[key]])
+}
+
+function fingerprint(fields: readonly unknown[]): string {
+  return bytesToHex(sha256(JSON.stringify(fields)))
+}
+
+/** Attribute a read to the exact configured setup, before applying inherited Settings. */
+export function automationModelRecoverySetupFingerprint(
+  setup: BotAgentSetup & { own: boolean },
+  bot: Pick<Bot, 'id' | 'permissionMode'>
+): string {
+  return fingerprint([
+    bot.id,
+    setup.own,
+    setup.agent,
+    setup.launch?.model,
+    sortedLaunchOptions(setup.launch),
+    bot.permissionMode
+  ])
 }
 
 export type AutomationModelRecoveryResult =
@@ -37,23 +99,16 @@ export function automationModelRecoveryTarget(
       : 'channel' in resultsTo
         ? ['channel', resultsTo.channel, resultsTo.ref]
         : ['linearIssue', resultsTo.linearIssue, resultsTo.ref]
-  const options = launch?.options ?? {}
-  return bytesToHex(
-    sha256(
-      JSON.stringify([
-        botId,
-        runsIn,
-        destination,
-        letBotReact === true,
-        bot.folderWorkspaceId,
-        folderPath,
-        bot.permissionMode,
-        permission,
-        agent,
-        Object.keys(options)
-          .sort()
-          .map((key) => [key, options[key]])
-      ])
-    )
-  )
+  return fingerprint([
+    botId,
+    runsIn,
+    destination,
+    letBotReact === true,
+    bot.folderWorkspaceId,
+    folderPath,
+    bot.permissionMode,
+    permission,
+    agent,
+    sortedLaunchOptions(launch)
+  ])
 }

@@ -160,6 +160,11 @@ export function useAutomationRunPageState({
       selectExternalKey(null)
     }
     if (!pendingAutomation) {
+      // The newer addressed list can disagree with a cached scoped row.
+      if (pending.ownerKey && !awaitingHistorySelection) {
+        setAwaitingHistorySelection(true)
+        return
+      }
       setSelectedId(pending.automationId)
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)

@@ -2,6 +2,7 @@ import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { subscribeHostAgentLaunchSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { AutomationModelRecoverySelection } from '../../../../../shared/automations/history/automation-model-recovery'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
+import type { BotAgent } from '../../../../../shared/bot-types'
 import { readAutomationRecoverySelectionForOwner } from '../hosts/automation-model-recovery-client'
 
 export type AutomationRecoveryModelRead =
@@ -17,27 +18,30 @@ export function useAutomationRecoveryModel(
   owner: AutomationOwnerRef | null,
   id: string | undefined,
   runKey: string | null,
-  setupKey: string
+  settingsKey: string,
+  agent: BotAgent | undefined,
+  setupFingerprint: string | undefined
 ) {
   const current = useRef<AutomationModelRecoverySelection | undefined>(undefined)
-  const lookupKey = owner && id ? runKey : null
+  const lookupKey =
+    owner && id && runKey && setupFingerprint ? JSON.stringify([runKey, setupFingerprint]) : null
   const [answer, setAnswer] = useState<{
     runKey: string | null
-    setupKey: string
+    settingsKey: string
     read: AutomationRecoveryModelRead
-  }>({ runKey: lookupKey, setupKey, read: pendingRead() })
+  }>({ runKey: lookupKey, settingsKey, read: pendingRead() })
   const sameVisit = answer.runKey === lookupKey
   const read =
-    sameVisit && answer.setupKey === setupKey
+    sameVisit && answer.settingsKey === settingsKey
       ? answer.read
       : pendingRead(sameVisit && 'selection' in answer.read ? answer.read.selection : undefined)
-  if (!sameVisit || answer.setupKey !== setupKey) {
-    setAnswer({ runKey: lookupKey, setupKey, read })
+  if (!sameVisit || answer.settingsKey !== settingsKey) {
+    setAnswer({ runKey: lookupKey, settingsKey, read })
   }
   const lookupOwner = useEffectEvent(() => owner)
   useLayoutEffect(() => {
     const owner = lookupOwner()
-    if (!owner || !id || !lookupKey) {
+    if (!owner || !id || !lookupKey || !agent || !setupFingerprint) {
       return
     }
     let request: object | undefined
@@ -46,7 +50,7 @@ export function useAutomationRecoveryModel(
       const token = {}
       request = token
       current.current = undefined
-      void readAutomationRecoverySelectionForOwner(owner, id)
+      void readAutomationRecoverySelectionForOwner(owner, id, agent, setupFingerprint)
         .catch(() => undefined)
         .then((selection) => {
           if (request !== token) {
@@ -56,7 +60,7 @@ export function useAutomationRecoveryModel(
           current.current = selection
           setAnswer({
             runKey: lookupKey,
-            setupKey,
+            settingsKey,
             read: selection ? { status: 'ready', selection } : { status: 'unavailable' }
           })
         })
@@ -68,7 +72,7 @@ export function useAutomationRecoveryModel(
         ? subscribeHostAgentLaunchSettings(({ environmentId }) => {
             if (environmentId === authority.environmentId) {
               refresh()
-              setAnswer({ runKey: lookupKey, setupKey, read: pendingRead(previous) })
+              setAnswer({ runKey: lookupKey, settingsKey, read: pendingRead(previous) })
             }
           })
         : undefined
@@ -77,6 +81,6 @@ export function useAutomationRecoveryModel(
       current.current = undefined
       unsubscribe?.()
     }
-  }, [id, lookupKey, setupKey])
+  }, [id, lookupKey, settingsKey, agent, setupFingerprint])
   return { read, currentSelection: () => current.current }
 }

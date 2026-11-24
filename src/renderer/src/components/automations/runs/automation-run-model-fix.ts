@@ -65,6 +65,7 @@ export function automationRunModelFix({
     currentModel !== undefined && isFailedAutomationRunModel(currentModel, run.errorParams)
   return {
     agent: setup.agent,
+    setup,
     currentModel,
     currentModelFailed,
     modelChanged:

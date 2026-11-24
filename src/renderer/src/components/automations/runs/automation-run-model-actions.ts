@@ -2,7 +2,10 @@ import { useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
 import { newChatPermissionModeForSettings } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { automationModelRecoveryTarget } from '../../../../../shared/automations/history/automation-model-recovery'
+import {
+  automationModelRecoverySetupFingerprint,
+  automationModelRecoveryTarget
+} from '../../../../../shared/automations/history/automation-model-recovery'
 import { isFailedAutomationRunModel } from '../../../../../shared/automations/history/automation-run-model-failure'
 import { ownerKey } from '../../../../../shared/automations/ownership/automation-owner-key'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
@@ -88,18 +91,24 @@ export function useAutomationRunModelActions(
       ? availability.owner
       : null
   const lookupSettings = lookupOwner?.authority.kind === 'desktop' ? store.settings : null
-  const lookupKey = JSON.stringify([
-    eligible?.agent,
-    eligible?.currentModel,
-    bot?.permissionMode,
-    eligible && lookupSettings?.agentLaunchChoices?.[eligible.agent]?.model,
-    eligible && newChatPermissionModeForSettings(eligible.agent, lookupSettings)
-  ])
+  const setupFingerprint =
+    lookupOwner && eligible && bot
+      ? automationModelRecoverySetupFingerprint(eligible.setup, bot)
+      : undefined
+  const settingsKey =
+    lookupSettings && eligible
+      ? JSON.stringify([
+          lookupSettings.agentLaunchChoices?.[eligible.agent]?.model,
+          newChatPermissionModeForSettings(eligible.agent, lookupSettings)
+        ])
+      : ''
   const { read, currentSelection } = useAutomationRecoveryModel(
     lookupOwner,
     selected?.id,
     activeRun,
-    lookupKey
+    settingsKey,
+    eligible?.agent,
+    setupFingerprint
   )
 
   const onPickModel = async (model: AutomationRunModelOption): Promise<void> => {

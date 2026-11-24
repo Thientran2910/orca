@@ -1,7 +1,9 @@
 import type { AutomationBotTarget } from '../../../../shared/automations/automation-definition'
 import {
+  automationModelRecoverySetupFingerprint,
   automationModelRecoveryTarget,
   type AutomationModelRecoveryInput,
+  type AutomationModelRecoveryProjection,
   type AutomationModelRecoveryResult,
   type AutomationModelRecoverySelection
 } from '../../../../shared/automations/history/automation-model-recovery'
@@ -36,7 +38,7 @@ function automationRecoveryPermission(
 export function readAutomationRecoverySelection(
   store: Pick<RecoveryStore, 'getBots' | 'getSettings'>,
   target?: AutomationBotTarget
-): AutomationModelRecoverySelection | undefined {
+): AutomationModelRecoveryProjection | undefined {
   const bot =
     target?.runsIn === 'new' && store.getBots?.().find((entry) => entry.id === target.botId)
   if (!bot || !target) {
@@ -45,6 +47,7 @@ export function readAutomationRecoverySelection(
   const settings = store.getSettings()
   const setup = botAutomationSetup(target, bot)
   return {
+    setupFingerprint: automationModelRecoverySetupFingerprint(setup, bot),
     model: botBackgroundStartOptions(settings, setup).model ?? null,
     permission: automationRecoveryPermission(settings, {
       ...setup,

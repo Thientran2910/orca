@@ -249,7 +249,7 @@ it('shows the owner Settings model, refuses the same choice and queues a differe
     settingsModel: 'settings-model',
     input: { model: 'settings-model' }
   })
-  expect(same.readSelection()).toEqual({ model: 'settings-model', permission: 'ask' })
+  expect(same.readSelection()).toMatchObject({ model: 'settings-model', permission: 'ask' })
   same.acceptSave()
   await expect(same.recovery).resolves.toEqual({ status: 'changed' })
   expect(same.target?.agentSetup).toBeUndefined()
@@ -257,7 +257,7 @@ it('shows the owner Settings model, refuses the same choice and queues a differe
   const different = beginRecovery({ settingsModel: 'settings-model' })
   different.acceptSave()
   await expect(different.recovery).resolves.toEqual({ status: 'queued', runId: 'queued' })
-  expect(different.readSelection()).toEqual({ model: 'replacement', permission: 'ask' })
+  expect(different.readSelection()).toMatchObject({ model: 'replacement', permission: 'ask' })
 })
 
 it('fences changed inherited permission before and after save, but honors a supported bot override', async () => {

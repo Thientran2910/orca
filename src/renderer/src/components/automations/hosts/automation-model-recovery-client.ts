@@ -1,11 +1,12 @@
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { AUTOMATION_MODEL_RECOVERY_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
-import type {
-  AutomationModelRecoveryInput,
-  AutomationModelRecoveryResult,
-  AutomationModelRecoverySelection
+import {
+  readAutomationModelRecoveryProjection,
+  type AutomationModelRecoveryInput,
+  type AutomationModelRecoveryResult,
+  type AutomationModelRecoverySelection
 } from '../../../../../shared/automations/history/automation-model-recovery'
-import { isAgentChatPermissionChoice } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { BotAgent } from '../../../../../shared/bot-types'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import {
   assertAuthorityCapability,
@@ -15,25 +16,18 @@ import { callAuthority, ownerPrecondition } from './automation-scoped-list-clien
 
 export async function readAutomationRecoverySelectionForOwner(
   owner: AutomationOwnerRef,
-  id: string
+  id: string,
+  agent: BotAgent,
+  expectedSetup: string
 ): Promise<AutomationModelRecoverySelection | undefined> {
   const { recoverySelection } = await callAuthority<{
-    recoverySelection?: Partial<AutomationModelRecoverySelection> | null
+    recoverySelection?: unknown
   }>(owner.authority, 'automation.show', {
     id,
     expectedOwner: ownerPrecondition(owner),
     modelRecovery: true
   })
-  if (
-    recoverySelection &&
-    (recoverySelection.model === null ||
-      (typeof recoverySelection.model === 'string' && recoverySelection.model.length > 0)) &&
-    (recoverySelection.permission === null ||
-      isAgentChatPermissionChoice(recoverySelection.permission))
-  ) {
-    return { model: recoverySelection.model, permission: recoverySelection.permission }
-  }
-  return undefined
+  return readAutomationModelRecoveryProjection(recoverySelection, agent, expectedSetup)
 }
 
 export async function recoverAutomationModelForOwner(
