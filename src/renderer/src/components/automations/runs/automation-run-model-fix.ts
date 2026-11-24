@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { createElement } from 'react'
 import { translate } from '@/i18n/i18n'
 import { peekRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -13,6 +14,7 @@ import {
 import type { Bot } from '../../../../../shared/bot-types'
 import { botAutomationSetup } from '../../../../../shared/bots/bot-agent-setup'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { AutomationRunReceiptAction } from './AutomationRunReceiptAction'
 
 export type AutomationRunModelOption = { id: string; label: string }
 
@@ -78,7 +80,10 @@ export function automationRunModelFix({
 export function showAutomationModelRecoveryResult(
   result: AutomationModelRecoveryResult,
   model: string,
-  { hostLabel, openRun }: { hostLabel?: string; openRun?: () => void } = {}
+  {
+    hostLabel,
+    receipt
+  }: { hostLabel?: string; receipt?: { runKey: string; open: () => void } } = {}
 ): void {
   switch (result.status) {
     case 'changed':
@@ -142,19 +147,16 @@ export function showAutomationModelRecoveryResult(
                 model
               }
             ),
-        openRun && {
+        receipt && {
           duration: Infinity,
           closeButton: true,
-          action: {
+          action: createElement(AutomationRunReceiptAction, {
+            ...receipt,
             label: translate(
               'auto.components.sidebar.WorktreeCardMeta.openAutomationRun',
               'Open run'
-            ),
-            onClick: (event) => {
-              event.preventDefault()
-              openRun()
-            }
-          }
+            )
+          })
         }
       )
       break

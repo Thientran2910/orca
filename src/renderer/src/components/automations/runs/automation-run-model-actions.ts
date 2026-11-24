@@ -24,6 +24,7 @@ import {
   type AutomationRunModelOption
 } from './automation-run-model-fix'
 import { useAutomationRecoveryModel } from './use-automation-recovery-model'
+import { automationRunReceiptKey } from './AutomationRunReceiptAction'
 
 export function useAutomationRunModelActions(
   controller: AutomationsPageController,
@@ -63,11 +64,11 @@ export function useAutomationRunModelActions(
     selectedRow &&
     selectedAutomationRunPage &&
     availability?.kind === 'owned'
-      ? JSON.stringify([
+      ? automationRunReceiptKey(
           selectedRow.key,
           ownerKey(availability.owner),
           selectedAutomationRunPage.id
-        ])
+        )
       : null
   const currentRunVisit = useRef<object | null>(null)
   useLayoutEffect(() => {
@@ -167,10 +168,13 @@ export function useAutomationRunModelActions(
       origin: local.runPageOrigin
     }
     showAutomationModelRecoveryResult(result.value, model.label, {
-      openRun: () => {
-        const state = useAppStore.getState()
-        state.setPendingAutomationRunNavigation({ ...navigation })
-        state.openAutomationsPage()
+      receipt: {
+        runKey: automationRunReceiptKey(navigation.rowKey, navigation.ownerKey, navigation.runId),
+        open: () => {
+          const state = useAppStore.getState()
+          state.setPendingAutomationRunNavigation({ ...navigation })
+          state.openAutomationsPage()
+        }
       }
     })
     if (

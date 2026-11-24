@@ -3,6 +3,10 @@ import type { AutomationRunNotFound, AutomationsPageLocation } from './automatio
 import { automationRowHostId } from './automations-page-navigation'
 import { automationRunFocusKey } from './runs/automations-reveal-run'
 import {
+  automationRunReceiptKey,
+  useVisibleAutomationRunReceiptKey
+} from './runs/AutomationRunReceiptAction'
+import {
   isAutomationRunNowListed,
   automationRunNowPendingDeadline,
   isAutomationRunNowPending,
@@ -72,6 +76,17 @@ export function useAutomationsPageRouting(
   } = local
   const { selected, selectedRow, selectedExternal } = list
   const selectedAutomationRunPage = setup.selectedAutomationRunPage
+  const runOwnerKey = local.selectedAutomationRuns.ownerKey
+  useVisibleAutomationRunReceiptKey(
+    pageView === 'run' &&
+      !store.pendingAutomationRunNavigation &&
+      !runNotFound &&
+      selectedRow &&
+      selectedAutomationRunPage &&
+      runOwnerKey
+      ? automationRunReceiptKey(selectedRow.key, runOwnerKey, selectedAutomationRunPage.id)
+      : null
+  )
 
   // Run now stays busy until its run is listed; a run already in progress never blocks it.
   // Each automation keeps its own request, so starting another one never frees this one.
