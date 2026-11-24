@@ -1,9 +1,7 @@
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
-import {
-  automationRunModelUnavailable,
-  type AutomationRunFailure
-} from '../../shared/automations/history/automation-run-failure-copy'
+import type { AutomationRunFailure } from '../../shared/automations/history/automation-run-failure-copy'
+import { automationRunModelUnavailable } from '../../shared/automations/history/automation-run-model-failure'
 import type { BotRunResult } from './bot-run-results'
 import type { BotTurnEnd } from './bot-run-turn-watch'
 

@@ -4,7 +4,7 @@ import { normalizeLoadedAutomationRuns } from '../persistence/loading-store/prof
 import type { PersistedState } from '../../shared/orca-profiles/persisted-state-types'
 import { makeTestBot } from './bot.test-fixture'
 import { botBackgroundStartOptions } from './bot-start-options'
-import { matchesAutomationRunModelFingerprint } from '../../shared/automations/history/automation-run-failure-copy'
+import { matchesAutomationRunModelFingerprint } from '../../shared/automations/history/automation-run-model-failure'
 import {
   deliverBotRunResult,
   type BotRunDeliveryDependencies,

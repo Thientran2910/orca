@@ -9,7 +9,7 @@ import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/run
 import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
-import { automationRunModelUnavailable } from '../../../../../shared/automations/history/automation-run-failure-copy'
+import { automationRunModelUnavailable } from '../../../../../shared/automations/history/automation-run-model-failure'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeAutomation, makeRun } from '../automations-page-fixtures'
 import { AutomationEditorDialog } from '../authoring/AutomationEditorDialog'

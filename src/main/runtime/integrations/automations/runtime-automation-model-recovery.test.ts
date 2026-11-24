@@ -8,7 +8,7 @@ import {
   automationModelRecoveryTarget,
   type AutomationModelRecoveryInput
 } from '../../../../shared/automations/history/automation-model-recovery'
-import { automationRunModelUnavailable } from '../../../../shared/automations/history/automation-run-failure-copy'
+import { automationRunModelUnavailable } from '../../../../shared/automations/history/automation-run-model-failure'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { FolderWorkspacePersistenceOperations } from '../../../persistence/restoring-sessions/folder-workspace-operations'

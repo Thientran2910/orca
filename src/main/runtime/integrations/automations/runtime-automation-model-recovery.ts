@@ -5,7 +5,7 @@ import {
   type AutomationModelRecoveryResult
 } from '../../../../shared/automations/history/automation-model-recovery'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automations/ownership/automation-owner-precondition'
-import { isFailedAutomationRunModel } from '../../../../shared/automations/history/automation-run-failure-copy'
+import { isFailedAutomationRunModel } from '../../../../shared/automations/history/automation-run-model-failure'
 import { BotLaunchSchema } from '../../../../shared/bots/bot-launch'
 import { botAutomationSetup } from '../../../../shared/bots/bot-agent-setup'
 import { resolveBotAutomationRunTarget } from '../../../automations/bot-run-target'

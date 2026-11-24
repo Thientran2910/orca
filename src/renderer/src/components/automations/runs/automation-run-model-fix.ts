@@ -9,7 +9,7 @@ import type { AutomationRun } from '../../../../../shared/automations/history/au
 import {
   isFailedAutomationRunModel,
   matchesAutomationRunModelFingerprint
-} from '../../../../../shared/automations/history/automation-run-failure-copy'
+} from '../../../../../shared/automations/history/automation-run-model-failure'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botAutomationSetup } from '../../../../../shared/bots/bot-agent-setup'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'

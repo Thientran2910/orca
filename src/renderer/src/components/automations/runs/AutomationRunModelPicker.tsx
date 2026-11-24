@@ -12,7 +12,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { agentPickerModels } from '../../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { isFailedAutomationRunModel } from '../../../../../shared/automations/history/automation-run-failure-copy'
+import { isFailedAutomationRunModel } from '../../../../../shared/automations/history/automation-run-model-failure'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { Bot, BotAgent } from '../../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
