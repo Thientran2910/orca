@@ -5,7 +5,7 @@ import { automationRunFocusKey } from './runs/automations-reveal-run'
 import {
   automationRunReceiptKey,
   useVisibleAutomationRunReceiptKey
-} from './runs/AutomationRunReceiptAction'
+} from './runs/automation-run-receipt'
 import {
   isAutomationRunNowListed,
   automationRunNowPendingDeadline,

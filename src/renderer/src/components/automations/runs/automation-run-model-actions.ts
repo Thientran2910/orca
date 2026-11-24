@@ -24,7 +24,7 @@ import {
   type AutomationRunModelOption
 } from './automation-run-model-fix'
 import { useAutomationRecoveryModel } from './use-automation-recovery-model'
-import { automationRunReceiptKey } from './AutomationRunReceiptAction'
+import { automationRunReceiptKey } from './automation-run-receipt'
 
 export function useAutomationRunModelActions(
   controller: AutomationsPageController,

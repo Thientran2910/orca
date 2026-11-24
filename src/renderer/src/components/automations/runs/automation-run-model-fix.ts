@@ -1,5 +1,4 @@
 import { toast } from 'sonner'
-import { createElement } from 'react'
 import { translate } from '@/i18n/i18n'
 import { peekRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -14,7 +13,7 @@ import {
 import type { Bot } from '../../../../../shared/bot-types'
 import { botAutomationSetup } from '../../../../../shared/bots/bot-agent-setup'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { AutomationRunReceiptAction } from './AutomationRunReceiptAction'
+import { showAutomationRunReceipt } from './automation-run-receipt'
 
 export type AutomationRunModelOption = { id: string; label: string }
 
@@ -133,32 +132,28 @@ export function showAutomationModelRecoveryResult(
             )
       )
       break
-    case 'queued':
-      toast(
-        result.newerModel
-          ? translate(
-              'automations.runModelFix.queuedWithNewerModel',
-              "Run queued with the automation's latest model."
-            )
-          : translate(
-              'automations.runModelFix.saved',
-              'Model set to {{model}} for this automation.',
-              {
-                model
-              }
-            ),
-        receipt && {
-          duration: Infinity,
-          closeButton: true,
-          action: createElement(AutomationRunReceiptAction, {
-            ...receipt,
-            label: translate(
-              'auto.components.sidebar.WorktreeCardMeta.openAutomationRun',
-              'Open run'
-            )
-          })
-        }
-      )
+    case 'queued': {
+      const message = result.newerModel
+        ? translate(
+            'automations.runModelFix.queuedWithNewerModel',
+            "Run queued with the automation's latest model."
+          )
+        : translate(
+            'automations.runModelFix.saved',
+            'Model set to {{model}} for this automation.',
+            {
+              model
+            }
+          )
+      if (receipt) {
+        showAutomationRunReceipt(message, {
+          ...receipt,
+          label: translate('auto.components.sidebar.WorktreeCardMeta.openAutomationRun', 'Open run')
+        })
+      } else {
+        toast(message)
+      }
       break
+    }
   }
 }
