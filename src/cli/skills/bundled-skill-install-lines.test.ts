@@ -98,7 +98,7 @@ describe('orca skills CLI refusal lines', () => {
       )
     ).toEqual([
       `  ${SKILLS}/orca: Updated.`,
-      `  orca: old copy kept as is at ${former}. Can't back it up to ${BACKUPS}: it's on another drive. Move it out of the skills folder. Orca won't mention this copy again.`
+      `  orca: old copy kept as is at ${former}. Can't back it up to ${BACKUPS}: it's on another drive. Move it out of the skills folder. Orca won't remind you.`
     ])
   })
 

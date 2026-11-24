@@ -8,6 +8,7 @@ import {
   makeSkillHome,
   NAME,
   NEW_SOURCE,
+  NEW_TEXT,
   OLD_TEXT,
   removeSkillHomes,
   serviceInput,

@@ -73,6 +73,8 @@ type RefusalSummary = {
   notices: BundledSkillRefusalNotice[]
   updated: boolean
   movedAside: boolean
+  /** A retired copy put back where the user left it; no later plan may mention it. */
+  putBack: boolean
   keptInPlace: number
 }
 
@@ -86,6 +88,7 @@ function summarize(outcome: BundledSkillOutcome): RefusalSummary | null {
     notices,
     updated: bundledSkillOutcomeUpdatedSomething(outcome),
     movedAside: notices.some((notice) => notice.source === 'moved-aside'),
+    putBack: notices.some((notice) => notice.source === 'in-place' && !notice.offeredAgain),
     keptInPlace: notices.filter((notice) => notice.source === 'in-place').length
   }
 }
@@ -95,6 +98,12 @@ function updatedHeadline(summary: RefusalSummary, t: Translate): string {
     return t(
       'auto.components.skills.skillBackupRefusal.updatedMovedAside',
       'Updated · Old copy moved aside'
+    )
+  }
+  if (summary.putBack) {
+    return t(
+      'auto.components.skills.skillBackupRefusal.updatedOldKept',
+      'Updated · Old copy kept as is'
     )
   }
   if (summary.keptInPlace > 0) {
@@ -132,6 +141,13 @@ export function skillRefusalRowHeadline(
 function settingsHeadline(summary: RefusalSummary, t: Translate): string {
   if (summary.updated) {
     return updatedHeadline(summary, t)
+  }
+  // The main copy was only rechecked as current; a retired copy went back where the user left it.
+  if (summary.putBack && !summary.movedAside) {
+    return t(
+      'auto.components.skills.skillBackupRefusal.upToDateOldKept',
+      'Up to date · Old copy kept as is'
+    )
   }
   if (summary.keptInPlace > 0) {
     return t(

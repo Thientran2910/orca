@@ -73,6 +73,21 @@ describe('cross-drive backup refusal copy', () => {
     })
   })
 
+  it('Settings names a put-back copy the way its toast does', () => {
+    const former = '/home/u/.gemini/skills/orca'
+    const putBack = (fields: Partial<BundledSkillOpOutcome>) =>
+      refused('in-place', former, {
+        backupRefusal: { path: former, source: 'in-place', onlyNotice: true },
+        ...fields
+      })
+    expect(settings(outcome(putBack({ kind: 'update', contentApplied: true })))).toBe(
+      `Updated · Old copy kept as is\n${former}`
+    )
+    expect(settings(outcome(putBack({ kind: 'keep', currentConfirmed: true })))).toBe(
+      `Up to date · Old copy kept as is\n${former}`
+    )
+  })
+
   it('S2: a left-over copy follows whether the main copy updated', () => {
     const leftover = `${SKILLS}/.orca.orca-old-1`
     const keep = refused('leftover', leftover, { kind: 'keep', currentConfirmed: true })

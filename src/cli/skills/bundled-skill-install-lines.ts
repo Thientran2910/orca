@@ -34,7 +34,7 @@ function describeRefusal(notice: BundledSkillRefusalNotice, backupFolder: string
       // A retired copy put back in place may never be planned again, so a rerun won't find it.
       return notice.offeredAgain
         ? `${notice.skill}: kept as is at ${notice.path}. ${cannot} Move it out of the skills folder, then run again.`
-        : `${notice.skill}: old copy kept as is at ${notice.path}. ${cannot} Move it out of the skills folder. Orca won't mention this copy again.`
+        : `${notice.skill}: old copy kept as is at ${notice.path}. ${cannot} Move it out of the skills folder. Orca won't remind you.`
     case 'leftover':
       return `${notice.skill}: left-over copy kept at ${notice.path}. ${cannot} Move it out of the skills folder, then run again.`
     case 'moved-aside':
