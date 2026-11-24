@@ -20,16 +20,24 @@ export function useAutomationRecoveryModel(
   setupKey: string
 ) {
   const current = useRef<AutomationModelRecoverySelection | undefined>(undefined)
+  const lookupKey = owner && id ? runKey : null
   const [answer, setAnswer] = useState<{
-    runKey: string
+    runKey: string | null
     setupKey: string
     read: AutomationRecoveryModelRead
-  } | null>(null)
-  const hasOwner = owner !== null
+  }>({ runKey: lookupKey, setupKey, read: pendingRead() })
+  const sameVisit = answer.runKey === lookupKey
+  const read =
+    sameVisit && answer.setupKey === setupKey
+      ? answer.read
+      : pendingRead(sameVisit && 'selection' in answer.read ? answer.read.selection : undefined)
+  if (!sameVisit || answer.setupKey !== setupKey) {
+    setAnswer({ runKey: lookupKey, setupKey, read })
+  }
   const lookupOwner = useEffectEvent(() => owner)
   useLayoutEffect(() => {
     const owner = lookupOwner()
-    if (!hasOwner || !owner || !id || !runKey) {
+    if (!owner || !id || !lookupKey) {
       return
     }
     let request: object | undefined
@@ -47,7 +55,7 @@ export function useAutomationRecoveryModel(
           previous = selection
           current.current = selection
           setAnswer({
-            runKey,
+            runKey: lookupKey,
             setupKey,
             read: selection ? { status: 'ready', selection } : { status: 'unavailable' }
           })
@@ -60,7 +68,7 @@ export function useAutomationRecoveryModel(
         ? subscribeHostAgentLaunchSettings(({ environmentId }) => {
             if (environmentId === authority.environmentId) {
               refresh()
-              setAnswer({ runKey, setupKey, read: pendingRead(previous) })
+              setAnswer({ runKey: lookupKey, setupKey, read: pendingRead(previous) })
             }
           })
         : undefined
@@ -69,11 +77,6 @@ export function useAutomationRecoveryModel(
       current.current = undefined
       unsubscribe?.()
     }
-  }, [hasOwner, id, runKey, setupKey])
-  const matching = hasOwner && answer?.runKey === runKey ? answer : null
-  const read =
-    matching?.setupKey === setupKey
-      ? matching.read
-      : pendingRead(matching && 'selection' in matching.read ? matching.read.selection : undefined)
+  }, [id, lookupKey, setupKey])
   return { read, currentSelection: () => current.current }
 }
