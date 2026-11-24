@@ -30,10 +30,7 @@ export function resolveAutomationRunLinkRow(
 ) {
   const row = rows.find(
     (candidate) =>
-      candidate.automation.id === pending.automationId &&
-      (!pending.ownerKey ||
-        pending.ownerKey ===
-          capturedAutomationOwnerKey(capturedAutomationOwner(owners, candidate.key))) &&
+      matchesAutomationRunLinkRow(pending, candidate, owners) &&
       (!candidate.catalogRef ||
         getAutomationHostTargetKey(getAutomationAuthorityTarget(candidate.catalogRef.authority)) ===
           authorityTargetKey)
@@ -47,4 +44,17 @@ export function resolveAutomationRunLinkRow(
       replacement?.owner &&
       capturedAutomationOwnerKey(replacement) !== pending.ownerKey
   }
+}
+
+export function matchesAutomationRunLinkRow(
+  target: Pick<PendingAutomationRunNavigation, 'automationId' | 'ownerKey' | 'rowKey'>,
+  row: AutomationListRow,
+  owners: ReadonlyMap<string, AutomationCapturedOwner>
+): boolean {
+  return (
+    row.automation.id === target.automationId &&
+    (!target.rowKey || row.key === target.rowKey) &&
+    (!target.ownerKey ||
+      target.ownerKey === capturedAutomationOwnerKey(capturedAutomationOwner(owners, row.key)))
+  )
 }

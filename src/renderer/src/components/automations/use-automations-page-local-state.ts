@@ -27,6 +27,19 @@ import type {
 import type { ExternalAutomationScope } from './external/external-automation-scope-client'
 import type { SelectedAutomationRunHistoryOutcome } from './runs/use-selected-automation-run-history'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+import { useAppStore } from '@/store/index'
+
+type AutomationRunVisit = Pick<
+  NonNullable<AutomationsPageStoreState['pendingAutomationRunNavigation']>,
+  'automationId' | 'hostId' | 'ownerKey' | 'rowKey'
+>
+
+function cancelBoundAutomationRunNavigation(): void {
+  const state = useAppStore.getState()
+  if (state.pendingAutomationRunNavigation?.ownerKey) {
+    state.setPendingAutomationRunNavigation(null)
+  }
+}
 
 /** React-owned values for the page; host/catalog state remains in dedicated hooks. */
 export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
@@ -77,6 +90,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [pageView, setPageView] = useState<AutomationsPageView>('automations')
   const [runPageOrigin, setRunPageOrigin] = useState<AutomationRunPageOrigin>('runs')
   const [runNotFound, setRunNotFound] = useState<AutomationRunNotFound | null>(null)
+  const [runVisit, setRunVisit] = useState<AutomationRunVisit | null>(null)
   const [runNowPending, setRunNowPending] = useState<AutomationRunNowPendingByRow>({})
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
@@ -91,15 +105,20 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     selectedExternalKeyRef.current = selectedExternalKey
   }, [selectedExternalKey])
 
+  const leaveBoundAutomationRun = useCallback((): void => {
+    cancelBoundAutomationRunNavigation()
+    setRunVisit(null)
+  }, [])
   const selectAutomationId = useCallback(
     (automationId: string | null): void => {
+      leaveBoundAutomationRun()
       setAwaitingHistorySelection(false)
       setRunHistoryAcquisitionToken((token) => token + 1)
       setSelectedAutomationRunPageId(null)
       setSelectedRowKey(null)
       setSelectedId(automationId)
     },
-    [setSelectedId]
+    [leaveBoundAutomationRun, setSelectedId]
   )
   const selectExternalKey = useCallback((externalKey: string | null): void => {
     setSelectedExternalKey(externalKey)
@@ -211,6 +230,9 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     setRunPageOrigin,
     runNotFound,
     setRunNotFound,
+    runVisit,
+    setRunVisit,
+    leaveBoundAutomationRun,
     runNowPending,
     setRunNowPending,
     activePaneTab,

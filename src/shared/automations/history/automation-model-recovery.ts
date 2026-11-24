@@ -92,14 +92,15 @@ export type AutomationModelRecoveryResult =
   | { status: 'saved'; rerun: 'skipped' | 'unconfirmed' }
   | { status: 'queued'; runId: string; newerModel?: true }
 
-/** Model-only edits leave the delivery target intact. */
-export function automationModelRecoveryTarget(
+type RecoveryTargetBot = Pick<Bot, 'agent' | 'launch' | 'folderWorkspaceId' | 'permissionMode'>
+
+function recoveryExecutionTargetFields(
   target: AutomationBotTarget,
-  bot: Pick<Bot, 'agent' | 'launch' | 'folderWorkspaceId' | 'permissionMode'>,
+  bot: RecoveryTargetBot,
   folderPath: string,
-  permission: AutomationModelRecoverySelection['permission']
-): string {
-  const { agent, launch } = botAutomationSetup(target, bot)
+  permission: AutomationModelRecoverySelection['permission'],
+  agent: BotAgentSetup['agent']
+): readonly unknown[] {
   const { botId, runsIn, resultsTo, letBotReact } = target
   const destination =
     typeof resultsTo === 'string'
@@ -107,7 +108,7 @@ export function automationModelRecoveryTarget(
       : 'channel' in resultsTo
         ? ['channel', resultsTo.channel, resultsTo.ref]
         : ['linearIssue', resultsTo.linearIssue, resultsTo.ref]
-  return fingerprint([
+  return [
     botId,
     runsIn,
     destination,
@@ -116,7 +117,30 @@ export function automationModelRecoveryTarget(
     folderPath,
     bot.permissionMode,
     permission,
-    agent,
+    agent
+  ]
+}
+
+/** Match the configured target the renderer saw before saving. */
+export function automationModelRecoveryTarget(
+  target: AutomationBotTarget,
+  bot: RecoveryTargetBot,
+  folderPath: string,
+  permission: AutomationModelRecoverySelection['permission']
+): string {
+  const { agent, launch } = botAutomationSetup(target, bot)
+  return fingerprint([
+    ...recoveryExecutionTargetFields(target, bot, folderPath, permission, agent),
     sortedLaunchOptions(launch)
   ])
+}
+
+/** After saving, the effective launch options are compared separately at admission. */
+export function automationModelRecoveryExecutionTarget(
+  target: AutomationBotTarget,
+  bot: RecoveryTargetBot,
+  folderPath: string,
+  permission: AutomationModelRecoverySelection['permission']
+): string {
+  return fingerprint(recoveryExecutionTargetFields(target, bot, folderPath, permission, bot.agent))
 }

@@ -26,6 +26,7 @@ type NavigationLocal = Pick<
   | 'setSelectedAutomationRunPageId'
   | 'setRunPageOrigin'
   | 'setRunNotFound'
+  | 'setRunVisit'
   | 'selectExternalKey'
   | 'setListSearchQuery'
 >
@@ -49,6 +50,7 @@ export function createAutomationsPageNavigation({
     setSelectedAutomationRunPageId,
     setRunPageOrigin,
     setRunNotFound,
+    setRunVisit,
     selectExternalKey,
     setListSearchQuery
   } = local
@@ -59,12 +61,14 @@ export function createAutomationsPageNavigation({
   }
   const showList = (): void => {
     leaveRun()
+    setRunVisit(null)
     setPageView('automations')
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showRuns = (): void => {
     leaveRun()
+    setRunVisit(null)
     setPageView('runs')
     setIsDetailOpen(false)
     setActivePaneTab('overview')
@@ -93,6 +97,7 @@ export function createAutomationsPageNavigation({
   }
   /** Apply a back/forward history entry. Automation pages resolve through the deep-link path. */
   const goToLocation = (location: AutomationsPageLocation): void => {
+    setRunVisit(null)
     // Why: the list keeps its search; an automation is resolved among all rows, not the filtered ones.
     if (location.page !== 'list' && location.page !== 'runs') {
       setListSearchQuery('')

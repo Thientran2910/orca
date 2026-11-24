@@ -1,5 +1,6 @@
 import type { AutomationBotTarget } from '../../../../shared/automations/automation-definition'
 import {
+  automationModelRecoveryExecutionTarget,
   automationModelRecoverySetupFingerprint,
   automationModelRecoveryTarget,
   isReadableAutomationRecoveryModel,
@@ -127,9 +128,9 @@ export async function recoverAutomationModel(
     const bot = { ...target, agentSetup: { agent: resolved.bot.agent, launch } }
     const savedBot = botOnSetup(resolved.bot, bot.agentSetup)
     const { model: _savedModel, ...savedOptions } = botBackgroundStartOptions(settings, savedBot)
-    const expectedSavedTarget = automationModelRecoveryTarget(
+    const expectedSavedTarget = automationModelRecoveryExecutionTarget(
       bot,
-      resolved.bot,
+      savedBot,
       resolved.cwd,
       permission
     )
@@ -152,7 +153,7 @@ export async function recoverAutomationModel(
       const currentSettings = store.getSettings()
       if (
         !runTarget.ok ||
-        automationModelRecoveryTarget(
+        automationModelRecoveryExecutionTarget(
           current,
           runTarget.bot,
           runTarget.cwd,

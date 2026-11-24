@@ -46,6 +46,7 @@ export function useAutomationRunPageState({
     | 'setPageView'
     | 'setRunPageOrigin'
     | 'setRunNotFound'
+    | 'setRunVisit'
     | 'isDetailOpen'
     | 'setIsDetailOpen'
     | 'awaitingHistorySelection'
@@ -78,6 +79,7 @@ export function useAutomationRunPageState({
     setPageView,
     setRunPageOrigin,
     setRunNotFound,
+    setRunVisit,
     isDetailOpen,
     setIsDetailOpen,
     awaitingHistorySelection,
@@ -139,6 +141,7 @@ export function useAutomationRunPageState({
     }
     // Why: a new request replaces any earlier missing-run result; it is resolved from scratch.
     setRunNotFound(null)
+    setRunVisit(null)
     if (pending.runId) {
       // Why: a deep link (workspace card, notification) undoes to its automation, not the Runs list.
       setRunPageOrigin(pending.origin ?? 'automation')
@@ -198,15 +201,24 @@ export function useAutomationRunPageState({
       }
       return
     }
-    if (selectedId !== pending.automationId || selectedRow?.key !== pendingRow.key) {
+    if (
+      !pending.ownerKey &&
+      (selectedId !== pending.automationId || selectedRow?.key !== pendingRow.key)
+    ) {
       selectAutomationRow(pendingRow.key)
       setIsDetailOpen(true)
+      return
+    }
+    if (selectedRow?.key !== pendingRow.key) {
       return
     }
     if (pending.ownerKey) {
       setAwaitingHistorySelection(false)
     }
     if (!pending.runId) {
+      if (pending.ownerKey) {
+        setRunVisit(pending)
+      }
       setIsDetailOpen(true)
       setActivePaneTab(pending.paneTab ?? 'overview')
       setSelectedAutomationRunPageId(null)
@@ -216,6 +228,9 @@ export function useAutomationRunPageState({
     }
     if (!selectedRunsReady) {
       return
+    }
+    if (pending.ownerKey) {
+      setRunVisit(pending)
     }
     if (selectedRunsNotice) {
       // The recent-runs rail shows why the history could not be read.
@@ -265,6 +280,7 @@ export function useAutomationRunPageState({
     setPageView,
     setRunPageOrigin,
     setRunNotFound,
+    setRunVisit,
     setSelectedAutomationRunPageId,
     setSelectedId,
     t

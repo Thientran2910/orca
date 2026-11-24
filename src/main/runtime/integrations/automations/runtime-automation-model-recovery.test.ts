@@ -426,6 +426,35 @@ it('admits a rerun with a newer model saved for the same destination', async () 
   expect(pending.target?.agentSetup?.launch?.model).toBe('newer-model')
 })
 
+it('admits a newer inherited model when its effective non-model settings are equal', async () => {
+  const inheritedTarget = { botId: 'bot-1', runsIn: 'new', resultsTo: 'none' } as const
+  const pending = beginRecovery({
+    settingsModel: 'model-c',
+    settingsOptions: { effort: 'high' },
+    target: {
+      agentSetup: { agent: 'codex', launch: { model: 'old-model', options: { effort: 'high' } } }
+    }
+  })
+  expect(pending.target?.agentSetup?.launch).toEqual({
+    model: 'replacement',
+    options: { effort: 'high' }
+  })
+  expect(pending.readSelection()?.permission).toBe('ask')
+  pending.editWithOwnerWriter(inheritedTarget)
+  expect(pending.target).toEqual(inheritedTarget)
+  expect(pending.backgroundSettings()).toEqual({ model: 'model-c', effort: 'high' })
+  expect(pending.readSelection()?.permission).toBe('ask')
+  pending.acceptSave()
+
+  await expect(pending.recovery).resolves.toEqual({
+    status: 'queued',
+    runId: 'queued',
+    newerModel: true
+  })
+  expect(pending.target).toEqual(inheritedTarget)
+  expect(pending.queued().map((run) => run.id)).toEqual(['queued'])
+})
+
 it('skips automatic rerun when a newer owner save changes effective non-model settings', async () => {
   const inheritedTarget = { botId: 'bot-1', runsIn: 'new', resultsTo: 'none' } as const
   const changed = beginRecovery({ settingsModel: 'model-c', settingsOptions: { effort: 'high' } })

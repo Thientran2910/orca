@@ -64,6 +64,7 @@ export function useAutomationsPageRouting(
     pageView,
     runPageOrigin,
     runNotFound,
+    runVisit,
     runNowPending,
     setRunNowPending,
     isDetailOpen,
@@ -102,6 +103,9 @@ export function useAutomationsPageRouting(
   }, [runNowListed, selectedPending, setRunNowPending])
 
   const selectedHostId = automationRowHostId(selectedRow)
+  const locationHost = runVisit?.ownerKey
+    ? { hostId: runVisit.hostId, ownerKey: runVisit.ownerKey, rowKey: runVisit.rowKey }
+    : { hostId: selectedHostId }
   const isResolving =
     Boolean(store.pendingAutomationRunNavigation) ||
     isLoading ||
@@ -118,7 +122,7 @@ export function useAutomationsPageRouting(
                 page: 'run',
                 automationId: selected.id,
                 runId: selectedAutomationRunPage.id,
-                hostId: selectedHostId,
+                ...locationHost,
                 origin: runPageOrigin
               }
             : null
@@ -128,7 +132,7 @@ export function useAutomationsPageRouting(
               ? {
                   page: activePaneTab === 'runs' ? 'automationRuns' : 'detail',
                   automationId: selected.id,
-                  hostId: selectedHostId
+                  ...locationHost
                 }
               : isDetailOpen
                 ? null

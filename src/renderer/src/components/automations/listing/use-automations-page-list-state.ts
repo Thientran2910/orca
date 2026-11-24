@@ -6,6 +6,7 @@ import {
   toStableCatalogRef
 } from '../../../../../shared/automations/ownership/automation-owner-key'
 import { resolveAutomationRunTarget } from '../runs/automation-run-open-target'
+import { matchesAutomationRunLinkRow } from '../runs/automation-run-link-row'
 import {
   capturedAutomationOwner,
   capturedAutomationOwnerKey
@@ -60,10 +61,12 @@ export function useAutomationsPageListState({
     | 'setSelectedRowKey'
     | 'setRunHistoryAcquisitionToken'
     | 'setAwaitingHistorySelection'
+    | 'runVisit'
+    | 'leaveBoundAutomationRun'
   >
 }) {
   const intlLocale = useIntlLocale()
-  const { repoMap, worktreeMap, selectedId, setSelectedId } = store
+  const { repoMap, worktreeMap, selectedId, setSelectedId, pendingAutomationRunNavigation } = store
   const {
     automations,
     failedAuthorityKeys,
@@ -78,7 +81,9 @@ export function useAutomationsPageListState({
     setSelectedAutomationRunPageId,
     setSelectedRowKey,
     setRunHistoryAcquisitionToken,
-    setAwaitingHistorySelection
+    setAwaitingHistorySelection,
+    runVisit,
+    leaveBoundAutomationRun
   } = local
   const hostCatalog = useAutomationHostCatalog({ failedAuthorityKeys })
   const externalScopeEntries = useMemo(
@@ -107,6 +112,7 @@ export function useAutomationsPageListState({
     (rowKey: string | null, automatic?: true): void => {
       const row = rowKey === null ? null : visibleRows.find((candidate) => candidate.key === rowKey)
       if (!automatic) {
+        leaveBoundAutomationRun()
         setAwaitingHistorySelection(false)
       }
       setRunHistoryAcquisitionToken((token) => token + 1)
@@ -115,6 +121,7 @@ export function useAutomationsPageListState({
       setSelectedId(row?.automation.id ?? null)
     },
     [
+      leaveBoundAutomationRun,
       setSelectedAutomationRunPageId,
       setSelectedId,
       setSelectedRowKey,
@@ -123,14 +130,20 @@ export function useAutomationsPageListState({
       visibleRows
     ]
   )
-  const selectedExternal =
-    externalAutomationEntries.find((entry) => entry.key === selectedExternalKey) ??
-    // Why: a key that no longer resolves (job removed, history replay) must not open another job.
-    (selectedExternalKey === null && visibleRows.length === 0
-      ? (externalAutomationEntries[0] ?? null)
-      : null)
-  const selectedRow =
-    selectedExternalKey === null && selectedExternal === null
+  const navigation = pendingAutomationRunNavigation ?? runVisit
+  const boundRun = navigation?.ownerKey ? navigation : null
+  const selectedExternal = boundRun
+    ? null
+    : (externalAutomationEntries.find((entry) => entry.key === selectedExternalKey) ??
+      // Why: a key that no longer resolves (job removed, history replay) must not open another job.
+      (selectedExternalKey === null && visibleRows.length === 0
+        ? (externalAutomationEntries[0] ?? null)
+        : null))
+  const selectedRow = boundRun
+    ? (visibleRows.find((candidate) =>
+        matchesAutomationRunLinkRow(boundRun, candidate, capturedAutomationOwners)
+      ) ?? null)
+    : selectedExternalKey === null && selectedExternal === null
       ? selectedId
         ? (visibleRows.find(
             (row) => row.key === selectedRowKey && row.automation.id === selectedId
@@ -155,7 +168,7 @@ export function useAutomationsPageListState({
     worktreeMap,
     selectedRowKey: selectedRow?.key ?? null,
     selectedExternalKey,
-    alignSelection: !store.pendingAutomationRunNavigation?.ownerKey,
+    alignSelection: !boundRun,
     selectAutomationRow,
     selectExternalKey
   })
@@ -238,6 +251,7 @@ export function useAutomationsPageListState({
   )
 
   return {
+    boundRun,
     hostCatalog,
     externalScopeEntries,
     scopedExternal,

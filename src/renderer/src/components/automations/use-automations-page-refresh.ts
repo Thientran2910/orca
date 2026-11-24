@@ -68,7 +68,7 @@ export function useAutomationsPageRefresh({
     awaitingHistorySelection,
     setAwaitingHistorySelection
   } = local
-  const { scopedExternal, selectedRow } = list
+  const { scopedExternal, selectedRow, boundRun } = list
   const { automationHostTargetFor } = destination
   const pendingTargetKey = pendingAutomationRunNavigation
     ? getAutomationHostTargetKey(
@@ -217,9 +217,11 @@ export function useAutomationsPageRefresh({
     context: destination.automationDispatchContext,
     legacyTarget: automationHostTargetFor,
     navigation: pendingAutomationRunNavigation,
-    suspended: pendingAutomationRunNavigation?.ownerKey
-      ? isLoading || automationHostTargetKey !== pendingTargetKey
-      : awaitingHistorySelection && !pendingAutomationRunNavigation,
+    suspended:
+      (boundRun !== null && selectedRow === null) ||
+      (pendingAutomationRunNavigation?.ownerKey
+        ? isLoading || automationHostTargetKey !== pendingTargetKey
+        : awaitingHistorySelection && !pendingAutomationRunNavigation),
     reloadToken: runHistoryReloadToken,
     acquisitionToken: local.runHistoryAcquisitionToken,
     onSettled: local.setSelectedAutomationRuns

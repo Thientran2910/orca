@@ -97,6 +97,7 @@ export function useAutomationsPageController() {
     setSelectedAutomationRunPageId,
     setRunPageOrigin,
     setRunNotFound,
+    setRunVisit,
     selectExternalKey,
     setListSearchQuery
   } = local
@@ -113,6 +114,7 @@ export function useAutomationsPageController() {
           setSelectedAutomationRunPageId,
           setRunPageOrigin,
           setRunNotFound,
+          setRunVisit,
           selectExternalKey,
           setListSearchQuery
         },
@@ -130,6 +132,7 @@ export function useAutomationsPageController() {
       setPageView,
       setPendingAutomationRunNavigation,
       setRunNotFound,
+      setRunVisit,
       setRunPageOrigin,
       setSelectedAutomationRunPageId
     ]
