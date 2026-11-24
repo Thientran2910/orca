@@ -6,6 +6,7 @@ import type {
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillPlanSkillSummary } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { SkillUpdateRow } from './SkillUpdateRow'
+import { SkillUpdateRows } from './SkillUpdateRows'
 import { skillBackupLocation } from './skill-backup-location'
 
 const SKILLS = '/Users/sam/.agents/skills'
@@ -78,7 +79,12 @@ function Rows(): React.JSX.Element {
       {row('gemini-former', [
         refused('gemini-former', 'in-place', '/Users/sam/.gemini/skills/gemini-former', {
           kind: 'write',
-          contentApplied: true
+          contentApplied: true,
+          backupRefusal: {
+            path: '/Users/sam/.gemini/skills/gemini-former',
+            source: 'in-place',
+            onlyNotice: true
+          }
         })
       ])}
       {row('electron', [
@@ -105,3 +111,51 @@ function Rows(): React.JSX.Element {
 
 export const states = defineFixture({ render: () => <Rows />, width: 640 })
 export const narrow = defineFixture({ render: () => <Rows />, width: 420 })
+
+/** A result for a skill the refreshed plan no longer lists keeps its row until Done. */
+function LeftPlan(): React.JSX.Element {
+  const planned: BundledSkillPlanSkillSummary = {
+    name: 'orca-cli',
+    state: 'current',
+    locations: [],
+    upToDate: true
+  }
+  const outcomes = new Map<string, BundledSkillOutcome>([
+    ['orca-cli', { name: 'orca-cli', status: 'ran', ops: [linked('orca-cli')] }],
+    [
+      LONG,
+      {
+        name: LONG,
+        status: 'ran',
+        ops: [
+          refused(LONG, 'in-place', `/Users/sam/.gemini/skills/${LONG}`, {
+            kind: 'update',
+            contentApplied: true,
+            backupRefusal: {
+              path: `/Users/sam/.gemini/skills/${LONG}`,
+              source: 'in-place',
+              onlyNotice: true
+            }
+          })
+        ]
+      }
+    ]
+  ])
+  return (
+    <div className="bg-background px-4">
+      <SkillUpdateRows
+        skills={[planned]}
+        unforcedPlan={null}
+        hasWork={false}
+        phase="result"
+        outcomes={outcomes}
+        replace={{ isReplaced: () => false, onReplaceChange: () => {} }}
+        showLocations={false}
+        onToggleLocations={() => {}}
+        backup={BACKUP}
+      />
+    </div>
+  )
+}
+
+export const leftPlan = defineFixture({ render: () => <LeftPlan />, width: 420 })

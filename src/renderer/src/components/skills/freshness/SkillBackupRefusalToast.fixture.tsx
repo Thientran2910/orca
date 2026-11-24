@@ -1,4 +1,5 @@
-// Automatic-update toasts for a refused cross-drive backup (item 1126 S3–S5) and a lost reply.
+// Automatic-update toasts for a refused cross-drive backup (item 1126 S3–S5, put-back), backups
+// and a lost reply.
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
@@ -123,6 +124,86 @@ export const grouped = defineFixture({
     />
   ),
   width: 480
+})
+
+const LONG = 'orca-cli-orchestration-and-worktree-handoff'
+const FORMER_ROOT = `/Users/sam/.gemini/skills/${LONG}`
+
+/** A retired copy put back where the user left it: its only notice. */
+const putBack = (name: string, path: string, updated = true): BundledSkillOpOutcome => ({
+  path: `${SKILLS}/${name}`,
+  kind: updated ? 'update' : 'keep',
+  status: 'failed',
+  error: 'EXDEV',
+  ...(updated ? { contentApplied: true as const } : { currentConfirmed: true as const }),
+  backupRefusal: { path, source: 'in-place', onlyNotice: true }
+})
+
+export const putBackUpdated = defineFixture({
+  render: () => <Toasts target={LOCAL} run={result({ [LONG]: putBack(LONG, FORMER_ROOT) })} />,
+  width: 360
+})
+
+export const putBackCurrent = defineFixture({
+  render: () => (
+    <Toasts target={LOCAL} run={result({ [LONG]: putBack(LONG, FORMER_ROOT, false) })} />
+  ),
+  width: 360
+})
+
+export const putBackRemote = defineFixture({
+  render: () => (
+    <Toasts
+      target={REMOTE}
+      run={result({ [LONG]: putBack(LONG, `/home/sam/.gemini/skills/${LONG}`) })}
+    />
+  ),
+  width: 360
+})
+
+export const groupMixed = defineFixture({
+  render: () => (
+    <Toasts
+      target={LOCAL}
+      run={result({
+        electron: movedAside('electron', `${SKILLS}/.electron.orca-old-7b1d44e0`),
+        [LONG]: putBack(LONG, FORMER_ROOT)
+      })}
+    />
+  ),
+  width: 360
+})
+
+export const groupAllPutBack = defineFixture({
+  render: () => (
+    <Toasts
+      target={LOCAL}
+      run={result({
+        electron: putBack('electron', '/Users/sam/.claude/skills/electron-old'),
+        [LONG]: putBack(LONG, FORMER_ROOT)
+      })}
+    />
+  ),
+  width: 360
+})
+
+/** A current copy whose old copy was backed up: nothing new was published. */
+export const backupOnly = defineFixture({
+  render: () => (
+    <Toasts
+      target={LOCAL}
+      run={result({
+        [LONG]: {
+          path: `${SKILLS}/${LONG}`,
+          kind: 'keep',
+          status: 'done',
+          backupPath: `/Users/sam/.agents/.orca-skill-backups/${LONG}-2026-11-23T18-02-11-512Z`,
+          backupPaths: [`/Users/sam/.agents/.orca-skill-backups/${LONG}-2026-11-23T18-02-11-512Z`]
+        }
+      })}
+    />
+  ),
+  width: 360
 })
 
 /** A lost or timed-out automatic update reply (item 1126 C3 copy). */

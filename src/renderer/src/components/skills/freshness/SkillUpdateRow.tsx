@@ -26,8 +26,9 @@ function RetainedPath({ path }: { path: string }): React.JSX.Element {
   const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1
   return (
     <span className="flex min-w-0 select-text font-mono text-xs text-muted-foreground" title={path}>
-      <span className="truncate">{path.slice(0, cut)}</span>
-      <span className="shrink-0">{path.slice(cut)}</span>
+      {/* The folder part gives way first; a last segment wider than the row wraps, never spills. */}
+      <span className="shrink-[100] truncate">{path.slice(0, cut)}</span>
+      <span className="min-w-0 break-all">{path.slice(cut)}</span>
     </span>
   )
 }

@@ -11,14 +11,20 @@ const SKILLS = '/Users/sam/.agents/skills'
 
 function status(
   ops: BundledSkillOpOutcome[],
-  others: BundledSkillInstallResult['skills'] = []
+  others: BundledSkillInstallResult['skills'] = [],
+  attention?: { retry: () => void; message?: string }
 ): React.JSX.Element {
   const result: BundledSkillInstallResult = {
     scope: 'global',
     skills: [{ name: 'orca-cli', status: 'ran', ops }, ...others]
   }
   const state = { kind: 'done' as const, result, summary: summarizeBundledSkillOutcomes(result) }
-  return <BundledSkillInstallStatus install={{ state, retry: () => {} }} />
+  return (
+    <BundledSkillInstallStatus
+      install={{ state, retry: () => {} }}
+      {...(attention ? { attention } : {})}
+    />
+  )
 }
 
 const refused = (
@@ -118,3 +124,45 @@ function Batch(): React.JSX.Element {
 }
 
 export const batch = defineFixture({ render: () => <Batch />, width: 320 })
+
+const FORMER = `/Users/sam/.gemini/skills/${LONG}`
+const putBack = (fields: Partial<BundledSkillOpOutcome>) =>
+  refused('in-place', FORMER, {
+    backupRefusal: { path: FORMER, source: 'in-place', onlyNotice: true },
+    ...fields
+  })
+
+/** A retired copy put back in place: updated, or the main copy only rechecked as current. */
+function PutBack(): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-4 bg-background p-4">
+      {status([putBack({ kind: 'update', contentApplied: true })])}
+      {status([putBack({ kind: 'keep', currentConfirmed: true })])}
+    </div>
+  )
+}
+
+export const putBackLines = defineFixture({ render: () => <PutBack />, width: 320 })
+
+/** After a refresh shows attention, the run's kept and backed-up paths stay below it. */
+function AfterRefresh(): React.JSX.Element {
+  const backup = `/Users/sam/.agents/.orca-skill-backups/${LONG}-2026-11-23T18-02-11-512Z`
+  return (
+    <div className="bg-background p-4">
+      {status(
+        [
+          putBack({
+            kind: 'update',
+            contentApplied: true,
+            backupPath: backup,
+            backupPaths: [backup]
+          })
+        ],
+        [],
+        { retry: () => {}, message: "Needs attention · This copy differs from Orca's" }
+      )}
+    </div>
+  )
+}
+
+export const afterRefresh = defineFixture({ render: () => <AfterRefresh />, width: 320 })
