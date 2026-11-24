@@ -81,9 +81,10 @@ export async function retireBundledSkillPlacement(
 }
 
 /**
- * A refused retirement with no forwarding link puts the edited copy back where the user left it,
- * so no plan has to rediscover it. Best effort, like Replace's rollback: a check, then a rename.
- * Throws the in-place refusal on success; returns when the copy must stay at `old`.
+ * A refused retirement with no forwarding link puts the edited copy back where the user left it.
+ * Best effort, like Replace's rollback: a check, then a rename. Throws the in-place refusal on
+ * success; returns when the copy must stay at `old`. Later plans may not list a retired place
+ * (a former root is never planned), so this result is the copy's only notice.
  */
 async function putBackRefusedCopy(
   filesystem: BundledSkillFilesystem,
@@ -98,7 +99,7 @@ async function putBackRefusedCopy(
   } catch {
     return
   }
-  throw new BundledSkillBackupRefusedError({ path, source: 'in-place' })
+  throw new BundledSkillBackupRefusedError({ path, source: 'in-place', onlyNotice: true })
 }
 
 /** Backups stay outside skill roots (agents would load them) and projects (they would pollute repos). */

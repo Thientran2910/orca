@@ -5,7 +5,8 @@ import {
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   summarizeBundledSkillOutcomes,
-  type BundledSkillOutcomeText
+  type BundledSkillOutcomeText,
+  type BundledSkillResultSummary
 } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { collapseHomePath } from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import {
@@ -87,25 +88,29 @@ export function bundledSkillSetupAttentionMessage(plan: BundledSkillPlan): strin
 /** Per-skill result blocks when a backup was refused; null when the one-line result applies. */
 export function skillInstallRefusalBlocks(
   result: BundledSkillInstallResult,
-  t: Translate = translate
+  t: Translate = translate,
+  summary: BundledSkillResultSummary = summarizeBundledSkillOutcomes(result)
 ): SkillRefusalSettingsBlock[] | null {
-  const summary = summarizeBundledSkillOutcomes(result)
+  const texts = new Map(
+    result.skills.map((outcome, index) => [outcome, summary.skills[index]?.text])
+  )
   return skillRefusalSettingsBlocks(result, t, (outcome) => {
-    const text = summary.skills[result.skills.indexOf(outcome)]?.text
+    const text = texts.get(outcome)
     return text && text !== 'No change' ? skillOutcomeText(outcome, t) : null
   })
 }
 
+/** Callers that also render the blocks pass the summary and blocks they already derived. */
 export function skillInstallResultLine(
   result: BundledSkillInstallResult,
   changes?: BundledSkillSetupChanges,
-  t: Translate = translate
+  t: Translate = translate,
+  summary: BundledSkillResultSummary = summarizeBundledSkillOutcomes(result),
+  refusal: SkillRefusalSettingsBlock[] | null = skillInstallRefusalBlocks(result, t, summary)
 ): string {
-  const refusal = skillInstallRefusalBlocks(result, t)
   if (refusal) {
     return skillRefusalSettingsText(refusal)
   }
-  const summary = summarizeBundledSkillOutcomes(result)
   const texts = new Set(summary.skills.map((skill) => skill.text))
   const headlineText = RESULT_HEADLINE_ORDER.find((text) => texts.has(text)) ?? 'No change'
   const outcome = result.skills.find((_, index) => summary.skills[index].text === headlineText)

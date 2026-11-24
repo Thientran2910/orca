@@ -8,7 +8,7 @@ import type {
   BundledSkillOpOutcome
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
-import { reportPreservedEdits, reportUncertainOutcome } from './skill-freshness-auto-update'
+import { reportPreservedEdits, reportUncertainOutcome } from './skill-update-result-toasts'
 
 const SKILLS = '/Users/sam/.agents/skills'
 

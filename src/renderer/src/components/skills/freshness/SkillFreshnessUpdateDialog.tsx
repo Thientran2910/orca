@@ -319,7 +319,10 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
 
         <DialogHeadline run={run} unsupported={state.unsupported} error={error} plan={livePlan} />
 
-        {shownPlan && shownSummary && shownSummary.skills.length > 0 ? (
+        {shownPlan &&
+        shownSummary &&
+        (shownSummary.skills.length > 0 ||
+          (run.state === 'done' && run.result.skills.length > 0)) ? (
           <SkillUpdateRows
             skills={shownSummary.skills}
             unforcedPlan={state.plan}

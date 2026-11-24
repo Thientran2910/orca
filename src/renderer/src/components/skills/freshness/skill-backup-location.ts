@@ -1,5 +1,6 @@
 import type { BundledSkillOpOutcome } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { collapseHomePath } from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import { bundledSkillOpBackupPaths } from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
@@ -56,9 +57,10 @@ export function useSkillBackupHost(target: BundledSkillTarget | null | undefined
   return hostFor(target, name)
 }
 
-/** Every backup path one install result created, in op order, without repeats. */
+/**
+ * Every backup path one install result created, in op order, without repeats. A failed or changed
+ * op can still have finished backups before it stopped, and those copies were moved.
+ */
 export function skillBackupPaths(ops: readonly BundledSkillOpOutcome[]): string[] {
-  return [
-    ...new Set(ops.flatMap((op) => (op.status === 'done' && op.backupPath ? [op.backupPath] : [])))
-  ]
+  return [...new Set(ops.flatMap(bundledSkillOpBackupPaths))]
 }

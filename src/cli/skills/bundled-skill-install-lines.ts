@@ -31,7 +31,10 @@ function describeRefusal(notice: BundledSkillRefusalNotice, backupFolder: string
   const cannot = `Can't back it up to ${backupFolder}: it's on another drive.`
   switch (notice.source) {
     case 'in-place':
-      return `${notice.skill}: kept as is at ${notice.path}. ${cannot} Move it out of the skills folder, then run again.`
+      // A retired copy put back in place may never be planned again, so a rerun won't find it.
+      return notice.offeredAgain
+        ? `${notice.skill}: kept as is at ${notice.path}. ${cannot} Move it out of the skills folder, then run again.`
+        : `${notice.skill}: old copy kept as is at ${notice.path}. ${cannot} Move it out of the skills folder. Orca won't mention this copy again.`
     case 'leftover':
       return `${notice.skill}: left-over copy kept at ${notice.path}. ${cannot} Move it out of the skills folder, then run again.`
     case 'moved-aside':
@@ -59,8 +62,12 @@ function describeOutcomeOp(op: BundledSkillOpOutcome, listPublished: boolean): s
       }
       return listPublished ? (PUBLISHED_TEXT[op.kind] ?? null) : null
     case 'changed':
-      return op.contentApplied
-        ? 'Partly done, then changed since it was planned. Run it again to re-plan.'
+      if (op.contentApplied) {
+        return 'Partly done, then changed since it was planned. Run it again to re-plan.'
+      }
+      // An earlier cleanup in the op may already have moved an old copy (listed below).
+      return bundledSkillOpBackupPaths(op).length > 0
+        ? 'Changed since it was planned; no new copy was written. Run it again to re-plan.'
         : 'Changed since it was planned; nothing was written. Run it again to re-plan.'
     case 'skipped':
       return 'Skipped: the shared copy it depends on did not land.'
@@ -80,10 +87,13 @@ export function describeOutcomeOpLines(
   listPublished = false
 ): string[] {
   const refusal = bundledSkillOpRefusalNotice(skill, op)
-  const text = refusal ? null : describeOutcomeOp(op, listPublished)
+  // An op can publish at its own path and then have a different, retired copy refused: name both.
+  const published =
+    refusal && op.contentApplied && refusal.path !== op.path ? PUBLISHED_TEXT[op.kind] : undefined
+  const text = refusal ? (published ?? null) : describeOutcomeOp(op, listPublished)
   return [
-    ...(refusal ? [`  ${describeRefusal(refusal, backupFolder)}`] : []),
     ...(text ? [`  ${op.path}: ${text}`] : []),
+    ...(refusal ? [`  ${describeRefusal(refusal, backupFolder)}`] : []),
     ...bundledSkillOpBackupPaths(op).map((path) => `  ${op.path}: Old copy moved to ${path}`)
   ]
 }

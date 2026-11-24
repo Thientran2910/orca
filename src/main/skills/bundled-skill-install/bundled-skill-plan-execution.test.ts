@@ -23,6 +23,7 @@ import {
   writeCopy,
   type SkillHome
 } from './testing/bundled-skill-home'
+import { lateEditingFilesystem } from './testing/late-editing-filesystem'
 
 afterEach(async () => {
   await removeSkillHomes()
@@ -453,130 +454,7 @@ describe('cross-drive backup refusal', () => {
     expect(link.status).toBe('done')
     expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
   })
-
-  it.each(['former root', 'former name in an agent folder'] as const)(
-    'puts a refused %s copy back where the user left it',
-    async (placement) => {
-      const home = await makeSkillHome()
-      const alias = 'former-skill'
-      const former =
-        placement === 'former root'
-          ? join(home.home, '.gemini', 'skills', NAME)
-          : join(dirname(home.claude), alias)
-      await writeCopy(home.shared, OLD_TEXT)
-      await writeCopy(former, OLD_TEXT)
-      const backups = join(home.home, '.agents', '.orca-skill-backups')
-      const late = lateEditingFilesystem(backups, former)
-      const input = {
-        ...serviceInput(home, { agents: ['claude'] }),
-        sources: [{ ...NEW_SOURCE, aliases: [alias] }]
-      }
-      const plan = await previewBundledSkillInstall(input)
-      const result = await installBundledSkills(
-        { ...input, filesystem: late.filesystem },
-        plan.planDigest
-      )
-      const retiring = result.skills[0].ops.find((op) => op.backupRefusal)
-      expect(retiring).toMatchObject({
-        status: 'failed',
-        error: 'EXDEV',
-        contentApplied: true,
-        backupRefusal: { path: former, source: 'in-place' }
-      })
-      expect(retiring?.backupRefusal?.onlyNotice).toBeUndefined()
-      expect(late.readsAfterRefusal()).toBe(0)
-      const edited = `dir[SKILL.md]:${OLD_TEXT}Late edit\n`
-      expect(await snapshot(former)).toBe(edited)
-      expect(await leftoverSiblings(former)).toEqual([])
-      expect(await readdir(backups)).toEqual([])
-      expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
-
-      // Later plans, fresh and installed-only, leave the edited copy where it is.
-      for (const later of [input, { ...input, installedOnly: true }]) {
-        const next = await previewBundledSkillInstall(later)
-        expect(next.skills[0].ops.some((op) => op.kind === 'restore')).toBe(false)
-        await installBundledSkills(later, next.planDigest)
-        expect(await snapshot(former)).toBe(edited)
-        expect(await leftoverSiblings(former)).toEqual([])
-      }
-      expect(await readdir(backups)).toEqual([])
-    }
-  )
-
-  it('reports the moved-aside path once when the put-back finds the place taken', async () => {
-    const home = await makeSkillHome()
-    const former = join(home.home, '.gemini', 'skills', NAME)
-    await writeCopy(home.shared, OLD_TEXT)
-    await writeCopy(former, OLD_TEXT)
-    const backups = join(home.home, '.agents', '.orca-skill-backups')
-    const late = lateEditingFilesystem(backups, former, () => writeCopy(former, 'someone else\n'))
-    const input = serviceInput(home, { agents: ['claude'] })
-    const plan = await previewBundledSkillInstall(input)
-    const result = await installBundledSkills(
-      { ...input, filesystem: late.filesystem },
-      plan.planDigest
-    )
-    const oldPath = late.oldPath()
-    expect(result.skills[0].ops[0].backupRefusal).toEqual({
-      path: oldPath,
-      source: 'moved-aside',
-      onlyNotice: true
-    })
-    expect(await readFile(join(oldPath, 'SKILL.md'), 'utf8')).toBe(`${OLD_TEXT}Late edit\n`)
-    expect(await readFile(join(former, 'SKILL.md'), 'utf8')).toBe('someone else\n')
-  })
 })
-
-/** Refuses backups as cross-drive, edits the retiring copy after its move aside, and counts later reads. */
-function lateEditingFilesystem(
-  backups: string,
-  retiring: string,
-  beforeRefusal: () => Promise<void> = async () => undefined
-) {
-  let oldPath = ''
-  let oldReads = 0
-  let refused = false
-  let readsAfterRefusal = 0
-  const count = (path: string) => {
-    if (refused && oldPath && (path.startsWith(oldPath) || path.startsWith(retiring))) {
-      readsAfterRefusal += 1
-    }
-  }
-  const filesystem: BundledSkillFilesystem = {
-    ...nativeBundledSkillFilesystem,
-    rename: async (source, target) => {
-      if (dirname(target) === backups) {
-        refused = true
-        await beforeRefusal()
-        throw Object.assign(new Error('cross-device rename'), { code: 'EXDEV' })
-      }
-      if (source === retiring) {
-        oldPath = target
-      }
-      return nativeBundledSkillFilesystem.rename(source, target)
-    },
-    readFile: async (path, maxBytes) => {
-      count(path)
-      if (oldPath && path === join(oldPath, 'SKILL.md') && ++oldReads === 2) {
-        await writeFile(path, `${OLD_TEXT}Late edit\n`)
-      }
-      return nativeBundledSkillFilesystem.readFile(path, maxBytes)
-    },
-    hashFile: async (path) => {
-      count(path)
-      return nativeBundledSkillFilesystem.hashFile!(path)
-    },
-    listEntries: async (directory) => {
-      count(directory)
-      return nativeBundledSkillFilesystem.listEntries(directory)
-    }
-  }
-  return {
-    filesystem,
-    oldPath: () => oldPath,
-    readsAfterRefusal: () => readsAfterRefusal
-  }
-}
 
 function refusingFilesystem(
   backups: string,

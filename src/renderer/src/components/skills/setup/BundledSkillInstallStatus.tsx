@@ -11,6 +11,7 @@ import {
   bundledSkillInstallNeedsAttention,
   type BundledSkillInstall
 } from '@/hooks/skills/installation/use-bundled-skill-install'
+import { summarizeBundledSkillOutcomes } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { skillBackupPaths } from '../freshness/skill-backup-location'
@@ -41,28 +42,55 @@ export function BundledSkillInstallStatus(props: {
   if (state.kind === 'idle' || state.kind === 'installing') {
     return null
   }
+  // Why the run's state: a refreshed preview (attention, unsupported) replaces the result line,
+  // but not the paths the run moved or kept; those stay until the result is dismissed or replaced.
+  const ran = props.install.state.kind === 'done' ? props.install.state : null
+  const ranSummary = ran ? summarizeBundledSkillOutcomes(ran.result) : null
+  const ranBlocks = ran && ranSummary ? skillInstallRefusalBlocks(ran.result, t, ranSummary) : null
+  const backupPaths = ran ? skillBackupPaths(ran.result.skills.flatMap((skill) => skill.ops)) : []
+  const backupLines = backupPaths.map((path) => (
+    <SkillBackupPathLine
+      key={path}
+      path={path}
+      host={ran?.backupHost ?? { kind: 'local' }}
+      className="basis-full"
+    />
+  ))
+  const showsRun = state === props.install.state
+  const retained =
+    !showsRun && ranBlocks ? (
+      <RefusalBlocks
+        blocks={ranBlocks}
+        showAll={showAllSkills}
+        onShowAll={() => setShowAllSkills(true)}
+        className="basis-full text-muted-foreground"
+      />
+    ) : null
   if (state.kind === 'unsupported') {
     return (
-      <p className={cn('text-xs leading-snug text-muted-foreground', props.className)}>
-        {state.reason === 'connect-host'
-          ? t(
-              'auto.components.settings.BundledSkillInstallStatus.connectHost',
-              'Connect to this SSH host to install its skills.'
-            )
-          : t(
-              'auto.components.settings.BundledSkillInstallStatus.updateServer',
-              'Update Orca on the server to install its skills.'
-            )}
-      </p>
+      <div className={cn('flex flex-wrap items-baseline gap-2', props.className)}>
+        <p className="min-w-0 flex-1 text-xs leading-snug text-muted-foreground">
+          {state.reason === 'connect-host'
+            ? t(
+                'auto.components.settings.BundledSkillInstallStatus.connectHost',
+                'Connect to this SSH host to install its skills.'
+              )
+            : t(
+                'auto.components.settings.BundledSkillInstallStatus.updateServer',
+                'Update Orca on the server to install its skills.'
+              )}
+        </p>
+        {retained}
+        {backupLines}
+      </div>
     )
   }
   const problem = bundledSkillInstallNeedsAttention(state)
-  const blocks = state.kind === 'done' ? skillInstallRefusalBlocks(state.result, t) : null
+  const blocks = showsRun ? ranBlocks : null
   const message =
-    state.kind === 'failed' ? state.message : skillInstallResultLine(state.result, state.changes, t)
-  // Why the run's state: an attention preview replaces the result line but not the backups it made.
-  const ran = props.install.state.kind === 'done' ? props.install.state : null
-  const backupPaths = ran ? skillBackupPaths(ran.result.skills.flatMap((skill) => skill.ops)) : []
+    state.kind === 'failed'
+      ? state.message
+      : skillInstallResultLine(state.result, state.changes, t, ranSummary ?? undefined, ranBlocks)
   const tone = problem ? 'text-destructive' : 'text-muted-foreground'
   return (
     <div className={cn('flex flex-wrap items-baseline gap-2', props.className)}>
@@ -84,14 +112,8 @@ export function BundledSkillInstallStatus(props: {
           {t('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')}
         </Button>
       ) : null}
-      {backupPaths.map((path) => (
-        <SkillBackupPathLine
-          key={path}
-          path={path}
-          host={ran?.backupHost ?? { kind: 'local' }}
-          className="basis-full"
-        />
-      ))}
+      {retained}
+      {backupLines}
     </div>
   )
 }

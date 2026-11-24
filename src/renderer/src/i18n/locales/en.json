@@ -7076,6 +7076,7 @@
           "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
           "preservedTitle": "Your edits to {{value0}} were saved separately",
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
+          "preservedBackupOnly": "Orca saved your edits to {{value0}}.",
           "uncertainTitleShort": "Couldn't confirm skill updates on {{value0}}",
           "uncertainEditedCopies": "Edited copies are in the backup folder or next to their skill."
         },
@@ -7104,8 +7105,11 @@
           "toastReason": "Couldn't back it up: it's on another drive.",
           "toastTitle": "{{value0}} updated · Old copy moved aside",
           "toastTitleKept": "{{value0}} · Old copy moved aside",
+          "toastTitleKeptInPlace": "{{value0}} updated · Old copy kept as is",
+          "toastTitleKeptInPlaceOnly": "{{value0}} · Old copy kept as is",
           "toastNoReminder": "Orca won't remind you.",
           "toastGroupTitle": "{{count}} old copies moved aside",
+          "toastGroupTitleMixed": "{{count}} old copies couldn't be backed up",
           "toastGroupReason": "Couldn't back them up: they're on another drive.",
           "showDetails": "Show details"
         }

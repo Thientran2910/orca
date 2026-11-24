@@ -56,6 +56,23 @@ describe('cross-drive backup refusal copy', () => {
     })
   })
 
+  it('S1: a retired copy put back in place never promises a retry will find it', () => {
+    const former = '/home/u/.gemini/skills/orca'
+    expect(
+      skillRefusalLines({
+        skill: 'orca',
+        path: former,
+        source: 'in-place',
+        contentApplied: true,
+        offeredAgain: false
+      })
+    ).toEqual({
+      reason: "Can't back it up: it's on another drive.",
+      path: former,
+      next: "Move it out of the skills folder. Orca won't remind you."
+    })
+  })
+
   it('S2: a left-over copy follows whether the main copy updated', () => {
     const leftover = `${SKILLS}/.orca.orca-old-1`
     const keep = refused('leftover', leftover, { kind: 'keep', currentConfirmed: true })

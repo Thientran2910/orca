@@ -16,7 +16,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SkillUpdateRow, type SkillReplaceToggle, type SkillRowPhase } from './SkillUpdateRow'
-import type { SkillBackupLocation } from './skill-backup-location'
+import { skillBackupPaths, type SkillBackupLocation } from './skill-backup-location'
 
 // Why: what Update changes reads first, then what it leaves for the user.
 const ROW_ORDER: readonly BundledSkillPlanState[] = [
@@ -27,13 +27,34 @@ const ROW_ORDER: readonly BundledSkillPlanState[] = [
   'current'
 ]
 
-/** A finished run lists what it changed and what it left; untouched skills stay off. */
+/** A finished run lists what it changed, moved and left; untouched skills stay off. */
 function resultShowsRow(outcome: BundledSkillOutcome | undefined): boolean {
   return Boolean(
     outcome &&
     (bundledSkillOutcomeText(outcome) !== 'No change' ||
-      outcome.ops.some((op) => op.kind === 'leave'))
+      outcome.ops.some((op) => op.kind === 'leave' || op.backupRefusal) ||
+      skillBackupPaths(outcome.ops).length > 0)
   )
+}
+
+/**
+ * Result rows come from the run, not only the refreshed plan: a skill the new plan no longer lists
+ * keeps its row (without plan locations) so its moved or kept paths stay in view.
+ */
+function withResultOnlySkills(
+  skills: readonly BundledSkillPlanSkillSummary[],
+  outcomes: ReadonlyMap<string, BundledSkillOutcome>
+): BundledSkillPlanSkillSummary[] {
+  const planned = new Set(skills.map((skill) => skill.name))
+  const missing = [...outcomes.keys()]
+    .filter((name) => !planned.has(name))
+    .map((name): BundledSkillPlanSkillSummary => ({
+      name,
+      state: 'current',
+      locations: [],
+      upToDate: false
+    }))
+  return missing.length > 0 ? [...skills, ...missing] : [...skills]
 }
 
 function UpToDateLine({
@@ -106,7 +127,7 @@ export function SkillUpdateRows({
   const orderedSkills =
     phase === 'plan'
       ? plannedSkills
-      : [...skills].sort(
+      : withResultOnlySkills(skills, outcomes).sort(
           (left, right) =>
             (previewRanks.get(left.name) ?? previewOrder.length) -
             (previewRanks.get(right.name) ?? previewOrder.length)

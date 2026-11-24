@@ -25,10 +25,16 @@ export function skillRefusalLines(
           "Can't back it up: it's on another drive."
         ),
         path: notice.path,
-        next: t(
-          'auto.components.skills.skillBackupRefusal.tryAgain',
-          'Move it out of the skills folder, then try again.'
-        )
+        // A retired copy put back in place may never be planned again, so retrying won't find it.
+        next: notice.offeredAgain
+          ? t(
+              'auto.components.skills.skillBackupRefusal.tryAgain',
+              'Move it out of the skills folder, then try again.'
+            )
+          : t(
+              'auto.components.skills.skillBackupRefusal.noReminder',
+              "Move it out of the skills folder. Orca won't remind you."
+            )
       }
     case 'leftover':
       return {
@@ -163,8 +169,9 @@ export function skillRefusalSettingsBlocks(
   if (refused.length === 0) {
     return null
   }
+  const refusedNames = new Set(refused.map((summary) => summary.name))
   const others = result.skills.flatMap((outcome) => {
-    if (refused.some((summary) => summary.name === outcome.name)) {
+    if (refusedNames.has(outcome.name)) {
       return []
     }
     const headline = otherSkill(outcome)

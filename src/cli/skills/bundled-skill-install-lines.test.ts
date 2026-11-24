@@ -41,6 +41,7 @@ describe('orca skills CLI refusal lines', () => {
         BACKUPS
       )
     ).toEqual([
+      `  ${SKILLS}/orca: Installed.`,
       `  orca: updated. Old copy moved aside to ${old}. Can't back it up to ${BACKUPS}: it's on another drive. Move it out of the skills folder to keep it. Orca won't mention this copy again.`,
       `  ${SKILLS}/orca: Old copy moved to ${BACKUPS}/orca-1`
     ])
@@ -76,6 +77,67 @@ describe('orca skills CLI refusal lines', () => {
       )
     ).toEqual([
       `  orca: Old copy moved aside to ${old}. Can't back it up to ${BACKUPS}: it's on another drive. Move it out of the skills folder to keep it.`
+    ])
+  })
+
+  it('names the published location beside a retired copy put back in place', () => {
+    const former = '/home/u/.gemini/skills/orca'
+    expect(
+      describeOutcomeOpLines(
+        'orca',
+        {
+          path: `${SKILLS}/orca`,
+          kind: 'update',
+          status: 'failed',
+          error: 'EXDEV',
+          contentApplied: true,
+          backupRefusal: { path: former, source: 'in-place', onlyNotice: true }
+        },
+        BACKUPS,
+        true
+      )
+    ).toEqual([
+      `  ${SKILLS}/orca: Updated.`,
+      `  orca: old copy kept as is at ${former}. Can't back it up to ${BACKUPS}: it's on another drive. Move it out of the skills folder. Orca won't mention this copy again.`
+    ])
+  })
+
+  it('names the published location beside a moved-aside refusal even with no backup line', () => {
+    const old = `${SKILLS}/.former-skill.orca-old-1`
+    const lines = describeOutcomeOpLines(
+      'orca',
+      {
+        path: `${SKILLS}/orca`,
+        kind: 'write',
+        status: 'failed',
+        error: 'EXDEV',
+        contentApplied: true,
+        backupRefusal: { path: old, source: 'moved-aside' }
+      },
+      BACKUPS,
+      true
+    )
+    expect(lines[0]).toBe(`  ${SKILLS}/orca: Installed.`)
+    expect(lines).toHaveLength(2)
+  })
+
+  it('does not say nothing was written when a cleanup already moved an old copy', () => {
+    const backup = `${BACKUPS}/orca-1`
+    expect(
+      describeOutcomeOpLines(
+        'orca',
+        {
+          path: `${SKILLS}/orca`,
+          kind: 'update',
+          status: 'changed',
+          backupPath: backup,
+          backupPaths: [backup]
+        },
+        BACKUPS
+      )
+    ).toEqual([
+      `  ${SKILLS}/orca: Changed since it was planned; no new copy was written. Run it again to re-plan.`,
+      `  ${SKILLS}/orca: Old copy moved to ${backup}`
     ])
   })
 
