@@ -130,12 +130,21 @@ export async function autoUpdateBundledSkills(
             (op.kind === 'keep' || (op.kind === 'leave' && op.reason === 'other-build')) &&
             op.cleanup.every((item) => item.action === 'delete'))
       )
+      let ran: BundledSkillOutcome | undefined
       if (ops.length > 0 && !input.recordOnly) {
         const source = findBundledSkillSource(input.sources, entry.name)
-        skills.push(await runSkill({ input, entry: { ...entry, ops }, source }))
+        ran = await runSkill({ input, entry: { ...entry, ops }, source })
+        skills.push(ran)
       }
-      // An already-current copy (keep-only, so nothing ran) written before markers existed.
-      if (holdsCurrentBundledSkillCopy(entry)) {
+      // An already-current copy (keep-only, so nothing ran) written before markers existed. A
+      // location this run rechecked and found changed no longer counts as the plan saw it.
+      const stale = new Set(
+        (ran?.ops ?? []).flatMap((op) =>
+          op.kind === 'keep' && op.status !== 'done' && !op.currentConfirmed ? [op.path] : []
+        )
+      )
+      const fresh = { ...entry, ops: entry.ops.filter((op) => !stale.has(op.path)) }
+      if (holdsCurrentBundledSkillCopy(fresh)) {
         await recordOrcaCopy(input, entry)
       }
     }
