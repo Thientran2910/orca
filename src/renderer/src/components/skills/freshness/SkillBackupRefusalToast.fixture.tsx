@@ -37,7 +37,7 @@ function Toasts({
   run: BundledSkillInstallResult
 }): React.JSX.Element {
   useEffect(() => {
-    reportPreservedEdits(target, run)
+    reportPreservedEdits(target, run, target.kind === 'local' ? '/Users/sam' : '/home/sam')
     return () => {
       toast.dismiss()
     }

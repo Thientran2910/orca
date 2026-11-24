@@ -101,12 +101,13 @@ describe('automatic update result notices', () => {
         status: 'done',
         backupPath: backup,
         backupPaths: [backup]
-      })
+      }),
+      '/home/u'
     )
     expect(infos()).toEqual([
       {
         title: 'Your edits to orca were saved separately',
-        description: `Orca saved your edits to ${middleTruncatePath(backup)}.`,
+        description: `Orca saved your edits to ${middleTruncatePath('~/.agents/.orca-skill-backups/orca-1')}.`,
         action: 'Show in folder'
       }
     ])

@@ -113,7 +113,7 @@ export function autoUpdateUnmodifiedSkills(
       autoUpdateBundledSkillsOnTarget(target, names, { recordOnly })
     )
       .then(
-        (ran) => reportPreservedEdits(target, ran?.value ?? null),
+        (ran) => reportPreservedEdits(target, ran?.value ?? null, plan.homeDirectory),
         // Settling the keys below means the same state is never retried; the nudge takes over.
         // A record-only call writes no skill, so its failure has nothing to warn about.
         () => {

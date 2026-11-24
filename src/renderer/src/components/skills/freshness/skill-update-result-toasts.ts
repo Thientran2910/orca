@@ -10,6 +10,7 @@ import {
   type BundledSkillRefusalNotice
 } from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { collapseHomePath } from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import { revealInFileManager } from '@/lib/files/os-open/reveal-in-file-manager'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
@@ -154,7 +155,9 @@ function warnAboutRefusals(
 /** A write that raced the update is kept aside; never let that pass as a silent success. */
 export function reportPreservedEdits(
   target: BundledSkillTarget,
-  result: BundledSkillInstallResult | null
+  result: BundledSkillInstallResult | null,
+  /** The host's home, so a path under it reads from `~/`; the action still opens the full path. */
+  homeDirectory?: string
 ): void {
   const refusals = automaticRefusalNotices(result)
   if (refusals.length > 0) {
@@ -182,7 +185,9 @@ export function reportPreservedEdits(
       const published =
         bundledSkillOpKindPublishes(op.kind) && (op.status === 'done' || op.contentApplied === true)
       for (const backupPath of bundledSkillOpBackupPaths(op)) {
-        const shown = middleTruncatePath(backupPath)
+        const shown = middleTruncatePath(
+          homeDirectory ? collapseHomePath(backupPath, homeDirectory) : backupPath
+        )
         // The edits are safe, so this is information, not a warning; the action opens the copy.
         toast.info(
           translate(
