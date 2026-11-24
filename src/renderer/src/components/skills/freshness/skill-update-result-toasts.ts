@@ -18,6 +18,17 @@ import { skillBackupDirectory, skillBackupHost } from './skill-backup-location'
 // Sticky toasts for what a skill update moved, kept or couldn't confirm; the automatic update
 // has no dialog, so these are its only result.
 
+const SHOWN_PATH_LENGTH = 44
+
+/** One line in a toast: the start of the path, then its end (the backup's own name) after `…`. */
+export function middleTruncatePath(path: string, max = SHOWN_PATH_LENGTH): string {
+  if (path.length <= max) {
+    return path
+  }
+  const head = Math.floor((max - 1) / 3)
+  return `${path.slice(0, head)}…${path.slice(path.length - (max - 1 - head))}`
+}
+
 function warnAboutEdits(title: string, description: string): void {
   toast.warning(title, { description, duration: Number.POSITIVE_INFINITY })
 }
@@ -128,7 +139,7 @@ function warnAboutRefusals(
     {
       description: translate(
         'auto.components.skills.skillBackupRefusal.toastGroupReason',
-        "Couldn't back them up: they're on another drive."
+        "They're on another drive."
       ),
       duration: Number.POSITIVE_INFINITY,
       action: {
@@ -171,34 +182,40 @@ export function reportPreservedEdits(
       const published =
         bundledSkillOpKindPublishes(op.kind) && (op.status === 'done' || op.contentApplied === true)
       for (const backupPath of bundledSkillOpBackupPaths(op)) {
-        warnAboutEdits(
+        const shown = middleTruncatePath(backupPath)
+        // The edits are safe, so this is information, not a warning; the action opens the copy.
+        toast.info(
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.preservedTitle',
             'Your edits to {{value0}} were saved separately',
             { value0: skill.name }
           ),
-          published
-            ? translate(
-                'auto.components.skills.skillFreshnessAutoUpdate.preservedDescription',
-                'Orca updated the skill and saved your edits to {{value0}}.',
-                { value0: backupPath }
-              )
-            : translate(
-                'auto.components.skills.skillFreshnessAutoUpdate.preservedBackupOnly',
-                'Orca saved your edits to {{value0}}.',
-                { value0: backupPath }
-              )
+          {
+            description: published
+              ? translate(
+                  'auto.components.skills.skillFreshnessAutoUpdate.preservedDescription',
+                  'Orca updated the skill and saved your edits to {{value0}}.',
+                  { value0: shown }
+                )
+              : translate(
+                  'auto.components.skills.skillFreshnessAutoUpdate.preservedBackupOnly',
+                  'Orca saved your edits to {{value0}}.',
+                  { value0: shown }
+                ),
+            duration: Number.POSITIVE_INFINITY,
+            action: retainedPathAction(target, backupPath),
+            cancel: dismissAction()
+          }
         )
       }
     }
   }
 }
 
-function targetLabel(target: BundledSkillTarget): string {
+/** A remote host's name; the local title names no host. */
+function remoteHostName(target: BundledSkillTarget): string {
   const host = skillBackupHost(target)
-  return host.kind === 'local'
-    ? translate('auto.components.skills.host.local', 'This machine')
-    : host.name
+  return host.kind === 'remote' ? host.name : ''
 }
 
 /** A lost or timed-out reply may follow a committed swap, so its backups must not go unmentioned. */
@@ -208,11 +225,16 @@ export function reportUncertainOutcome(
 ): void {
   // A refused backup leaves an edited copy beside its skill, so name both places.
   toast.warning(
-    translate(
-      'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitleShort',
-      "Couldn't confirm skill updates on {{value0}}",
-      { value0: targetLabel(target) }
-    ),
+    target.kind === 'local'
+      ? translate(
+          'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitleLocal',
+          "Couldn't confirm skill updates"
+        )
+      : translate(
+          'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitleShort',
+          "Couldn't confirm skill updates on {{value0}}",
+          { value0: remoteHostName(target) }
+        ),
     {
       description: translate(
         'auto.components.skills.skillFreshnessAutoUpdate.uncertainEditedCopies',

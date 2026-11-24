@@ -16,6 +16,11 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { skillBackupPaths } from '../freshness/skill-backup-location'
 import { SkillBackupPathLine } from '../freshness/SkillBackupPathLine'
+import { SkillPathText } from '../freshness/SkillPathText'
+import {
+  bundledSkillRefusalNotices,
+  bundledSkillResultOnlyRefused
+} from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 
 export function BundledSkillInstallStatus(props: {
   install: Pick<BundledSkillInstall, 'state' | 'retry'>
@@ -53,14 +58,20 @@ export function BundledSkillInstallStatus(props: {
       key={path}
       path={path}
       host={ran?.backupHost ?? { kind: 'local' }}
+      {...(ran?.homeDirectory ? { homeDirectory: ran.homeDirectory } : {})}
       className="basis-full"
     />
   ))
+  // A refused backup is a result, not an error: muted, and Retry only where a retry can find the copy.
+  const onlyRefused = ran ? bundledSkillResultOnlyRefused(ran.result) : false
+  const retryFindsNothing =
+    onlyRefused && bundledSkillRefusalNotices(ran?.result).every((notice) => !notice.offeredAgain)
   const showsRun = state === props.install.state
   const retained =
     !showsRun && ranBlocks ? (
       <RefusalBlocks
         blocks={ranBlocks}
+        homeDirectory={ran?.homeDirectory}
         showAll={showAllSkills}
         onShowAll={() => setShowAllSkills(true)}
         className="basis-full text-muted-foreground"
@@ -91,12 +102,13 @@ export function BundledSkillInstallStatus(props: {
     state.kind === 'failed'
       ? state.message
       : skillInstallResultLine(state.result, state.changes, t, ranSummary ?? undefined, ranBlocks)
-  const tone = problem ? 'text-destructive' : 'text-muted-foreground'
+  const tone = problem && !(showsRun && onlyRefused) ? 'text-destructive' : 'text-muted-foreground'
   return (
     <div className={cn('flex flex-wrap items-baseline gap-2', props.className)}>
-      {blocks && blocks.length > 1 ? (
+      {blocks ? (
         <RefusalBlocks
           blocks={blocks}
+          homeDirectory={ran?.homeDirectory}
           showAll={showAllSkills}
           onShowAll={() => setShowAllSkills(true)}
           className={tone}
@@ -106,7 +118,7 @@ export function BundledSkillInstallStatus(props: {
           {message}
         </p>
       )}
-      {problem ? (
+      {problem && !(showsRun && retryFindsNothing) ? (
         <Button type="button" variant="ghost" size={props.buttonSize ?? 'sm'} onClick={retry}>
           <RefreshCw className="size-3.5" />
           {t('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')}
@@ -123,6 +135,7 @@ const VISIBLE_SKILL_BLOCKS = 3
 /** A batch's per-skill states, each skill's kept paths indented and selectable beneath it. */
 function RefusalBlocks(props: {
   blocks: readonly SkillRefusalSettingsBlock[]
+  homeDirectory?: string
   showAll: boolean
   onShowAll: () => void
   className: string
@@ -133,16 +146,22 @@ function RefusalBlocks(props: {
       ? props.blocks
       : props.blocks.slice(0, VISIBLE_SKILL_BLOCKS)
   const hidden = props.blocks.length - visible.length
+  // A batch indents each skill's lines under its state; one skill's lines sit flush.
+  const indent = props.blocks.length > 1 ? 'pl-3' : undefined
   return (
     <div className={cn('flex min-w-0 flex-1 flex-col gap-1 text-xs leading-snug', props.className)}>
       {visible.map((block) => (
-        <div key={block.headline} className="min-w-0">
+        <div key={block.headline} className="flex min-w-0 flex-col">
           <p>{block.headline}</p>
           {block.paths.map((path) => (
-            <p key={path} className="select-text break-all pl-3" title={path}>
-              {path}
-            </p>
+            <SkillPathText
+              key={path}
+              path={path}
+              homeDirectory={props.homeDirectory}
+              className={indent}
+            />
           ))}
+          {block.next ? <p className={cn('text-muted-foreground', indent)}>{block.next}</p> : null}
         </div>
       ))}
       {hidden > 0 ? (

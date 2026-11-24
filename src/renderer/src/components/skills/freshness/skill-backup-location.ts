@@ -12,6 +12,8 @@ export type SkillBackupLocation = {
   /** The planned host's backups root, with its home shown as `~`. */
   folder: string
   host: SkillBackupHost
+  /** The planned host's home, so result paths under it can read from `~/`. */
+  homeDirectory?: string
 }
 
 /** The host-side folder where Replace and the executor move old copies. */
@@ -25,7 +27,11 @@ export function skillBackupLocation(
   homeDirectory: string,
   host: SkillBackupHost
 ): SkillBackupLocation {
-  return { folder: collapseHomePath(skillBackupDirectory(homeDirectory), homeDirectory), host }
+  return {
+    folder: collapseHomePath(skillBackupDirectory(homeDirectory), homeDirectory),
+    host,
+    homeDirectory
+  }
 }
 
 function hostFor(target: BundledSkillTarget | null | undefined, name?: string): SkillBackupHost {

@@ -7078,6 +7078,7 @@
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
           "preservedBackupOnly": "Orca saved your edits to {{value0}}.",
           "uncertainTitleShort": "Couldn't confirm skill updates on {{value0}}",
+          "uncertainTitleLocal": "Couldn't confirm skill updates",
           "uncertainEditedCopies": "Edited copies are in the backup folder or next to their skill."
         },
         "SkillBackupPathLine": {
@@ -7112,7 +7113,7 @@
           "toastNoReminder": "Orca won't remind you.",
           "toastGroupTitle": "{{count}} old copies moved aside",
           "toastGroupTitleMixed": "{{count}} old copies couldn't be backed up",
-          "toastGroupReason": "Couldn't back them up: they're on another drive.",
+          "toastGroupReason": "They're on another drive.",
           "showDetails": "Show details"
         }
       },

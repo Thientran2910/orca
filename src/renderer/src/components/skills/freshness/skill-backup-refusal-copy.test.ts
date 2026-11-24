@@ -81,10 +81,10 @@ describe('cross-drive backup refusal copy', () => {
         ...fields
       })
     expect(settings(outcome(putBack({ kind: 'update', contentApplied: true })))).toBe(
-      `Updated · Old copy kept as is\n${former}`
+      `Updated · Old copy kept as is\n${former}\nMove it out of the skills folder. Orca won't remind you.`
     )
     expect(settings(outcome(putBack({ kind: 'keep', currentConfirmed: true })))).toBe(
-      `Up to date · Old copy kept as is\n${former}`
+      `Up to date · Old copy kept as is\n${former}\nMove it out of the skills folder. Orca won't remind you.`
     )
   })
 

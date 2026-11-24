@@ -168,8 +168,11 @@ function settingsHeadline(summary: RefusalSummary, t: Translate): string {
   )
 }
 
-/** One skill's Settings result: its short state, then each retained path on its own line. */
-export type SkillRefusalSettingsBlock = { headline: string; paths: string[] }
+/**
+ * One skill's Settings result: its short state, each retained path on its own line, then what to
+ * do when no later plan may mention a copy again.
+ */
+export type SkillRefusalSettingsBlock = { headline: string; paths: string[]; next?: string }
 
 /**
  * Settings result after a refused backup. A batch with more than one skill to report gets a block
@@ -193,9 +196,15 @@ export function skillRefusalSettingsBlocks(
     const headline = otherSkill(outcome)
     return headline ? [{ headline: `${outcome.name}: ${headline}`, paths: [] }] : []
   })
-  const blocks = refused.map((summary) => ({
+  const blocks = refused.map((summary): SkillRefusalSettingsBlock => ({
     headline: settingsHeadline(summary, t),
-    paths: summary.notices.map((notice) => notice.path)
+    paths: summary.notices.map((notice) => notice.path),
+    ...(summary.notices.some((notice) => !notice.offeredAgain) && {
+      next: t(
+        'auto.components.skills.skillBackupRefusal.noReminder',
+        "Move it out of the skills folder. Orca won't remind you."
+      )
+    })
   }))
   if (blocks.length === 1 && others.length === 0) {
     return blocks
@@ -213,7 +222,11 @@ export function skillRefusalSettingsBlocks(
 export function skillRefusalSettingsText(blocks: readonly SkillRefusalSettingsBlock[]): string {
   const indent = blocks.length > 1 ? '  ' : ''
   return blocks
-    .flatMap((block) => [block.headline, ...block.paths.map((path) => `${indent}${path}`)])
+    .flatMap((block) => [
+      block.headline,
+      ...block.paths.map((path) => `${indent}${path}`),
+      ...(block.next ? [`${indent}${block.next}`] : [])
+    ])
     .join('\n')
 }
 

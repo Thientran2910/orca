@@ -17,22 +17,12 @@ import {
   skillPlanHeadline
 } from './skill-plan-op-copy'
 import { skillBackupPaths, type SkillBackupLocation } from './skill-backup-location'
+import { SkillPathText } from './SkillPathText'
 import { SkillBackupPathLine } from './SkillBackupPathLine'
 
 export type SkillRowPhase = 'plan' | 'pending' | 'result'
 
 /** Truncates in the middle: the folder shrinks, the last name stays; the full path is selectable. */
-function RetainedPath({ path }: { path: string }): React.JSX.Element {
-  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1
-  return (
-    <span className="flex min-w-0 select-text font-mono text-xs text-muted-foreground" title={path}>
-      {/* The folder part gives way first; a last segment wider than the row wraps, never spills. */}
-      <span className="shrink-[100] truncate">{path.slice(0, cut)}</span>
-      <span className="min-w-0 break-all">{path.slice(cut)}</span>
-    </span>
-  )
-}
-
 export type SkillReplaceToggle = {
   isReplaced: (path: string) => boolean
   onReplaceChange: (path: string, replace: boolean) => void
@@ -167,7 +157,7 @@ export function SkillUpdateRow({
                   className="flex min-w-0 flex-col gap-0.5"
                 >
                   <span>{lines.reason}</span>
-                  <RetainedPath path={lines.path} />
+                  <SkillPathText path={lines.path} homeDirectory={backup.homeDirectory} />
                   <span className="text-muted-foreground">{lines.next}</span>
                 </div>
               )
@@ -190,7 +180,12 @@ export function SkillUpdateRow({
           )
         })}
         {backupPaths.map((path) => (
-          <SkillBackupPathLine key={path} path={path} host={backup.host} />
+          <SkillBackupPathLine
+            key={path}
+            path={path}
+            host={backup.host}
+            homeDirectory={backup.homeDirectory}
+          />
         ))}
         {showLocations ? <LocationTable locations={skill.locations} /> : null}
       </div>

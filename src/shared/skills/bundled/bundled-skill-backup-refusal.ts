@@ -71,3 +71,14 @@ export function bundledSkillOutcomeUpdatedSomething(outcome: BundledSkillOutcome
       bundledSkillOpKindPublishes(op.kind) && (op.status === 'done' || op.contentApplied === true)
   )
 }
+
+/** Everything that went wrong in the run was a refused cross-drive backup; nothing else failed. */
+export function bundledSkillResultOnlyRefused(result: BundledSkillInstallResult): boolean {
+  const ops = result.skills.flatMap((skill) => (skill.status === 'ran' ? skill.ops : []))
+  const failing = ops.filter((op) => op.status === 'failed' || op.status === 'changed')
+  return (
+    result.skills.every((skill) => skill.status === 'ran') &&
+    failing.length > 0 &&
+    failing.every((op) => op.backupRefusal)
+  )
+}

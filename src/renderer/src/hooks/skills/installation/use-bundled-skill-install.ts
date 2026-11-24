@@ -41,6 +41,8 @@ export type BundledSkillInstallState =
       changes?: BundledSkillSetupChanges
       /** The host this run wrote on, so its backup paths say where they are. */
       backupHost?: SkillBackupHost
+      /** That host's home, so result paths under it read from `~/`. */
+      homeDirectory?: string
     }
   /** An older server ("Update Orca on the server"), or an SSH host no server serves yet. */
   | { kind: 'unsupported'; reason: BundledSkillUnsupportedReason }
@@ -131,7 +133,8 @@ export function useBundledSkillInstall(
             result,
             summary: summarizeBundledSkillOutcomes(result),
             changes: bundledSkillSetupChanges(planned.plan, result),
-            backupHost: skillBackupHost(target)
+            backupHost: skillBackupHost(target),
+            homeDirectory: planned.plan.homeDirectory
           }
         }
       } catch (error) {

@@ -4,14 +4,15 @@ import type {
   BundledSkillOpOutcome
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 
-vi.mock('sonner', () => ({ toast: { warning: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { warning: vi.fn(), info: vi.fn() } }))
 vi.mock('@/lib/files/os-open/reveal-in-file-manager', () => ({ revealInFileManager: vi.fn() }))
 vi.mock('./skill-backup-location', () => ({
   skillBackupDirectory: (home: string) => `${home}/.agents/.orca-skill-backups`,
   skillBackupHost: () => ({ kind: 'local' })
 }))
 
-const { reportPreservedEdits } = await import('./skill-update-result-toasts')
+const { middleTruncatePath, reportPreservedEdits, reportUncertainOutcome } =
+  await import('./skill-update-result-toasts')
 const { toast } = await import('sonner')
 
 const LOCAL = { kind: 'local' } as const
@@ -20,15 +21,18 @@ const result = (...ops: BundledSkillOpOutcome[]): BundledSkillInstallResult => (
   scope: 'global',
   skills: [{ name: 'orca', status: 'ran', ops }]
 })
-const warnings = () =>
-  vi.mocked(toast.warning).mock.calls.map(([title, options]) => ({
+const shown = (kind: 'warning' | 'info') =>
+  vi.mocked(toast[kind]).mock.calls.map(([title, options]) => ({
     title,
     description: (options as { description?: string }).description,
     action: (options as { action?: { label: string } }).action?.label
   }))
+const warnings = () => shown('warning')
+const infos = () => shown('info')
 
 afterEach(() => {
   vi.mocked(toast.warning).mockClear()
+  vi.mocked(toast.info).mockClear()
 })
 
 describe('automatic update result notices', () => {
@@ -99,9 +103,14 @@ describe('automatic update result notices', () => {
         backupPaths: [backup]
       })
     )
-    expect(warnings().map((warning) => warning.description)).toEqual([
-      `Orca saved your edits to ${backup}.`
+    expect(infos()).toEqual([
+      {
+        title: 'Your edits to orca were saved separately',
+        description: `Orca saved your edits to ${middleTruncatePath(backup)}.`,
+        action: 'Show in folder'
+      }
     ])
+    expect(warnings()).toEqual([])
   })
 
   it('names every backup an update made, and says it updated the skill', () => {
@@ -117,9 +126,9 @@ describe('automatic update result notices', () => {
         backupPaths: [first, second]
       })
     )
-    expect(warnings().map((warning) => warning.description)).toEqual([
-      `Orca updated the skill and saved your edits to ${first}.`,
-      `Orca updated the skill and saved your edits to ${second}.`
+    expect(infos().map((info) => info.description)).toEqual([
+      `Orca updated the skill and saved your edits to ${middleTruncatePath(first)}.`,
+      `Orca updated the skill and saved your edits to ${middleTruncatePath(second)}.`
     ])
   })
 
@@ -164,5 +173,19 @@ describe('automatic update result notices', () => {
     expect(warnings().map((warning) => warning.title)).toEqual([
       "2 old copies couldn't be backed up"
     ])
+  })
+
+  it('names no host for a local lost reply and the host for a remote one', () => {
+    reportUncertainOutcome(LOCAL, { homeDirectory: '/home/u' })
+    expect(warnings().map((warning) => warning.title)).toEqual(["Couldn't confirm skill updates"])
+  })
+
+  it('keeps a backup path to one line with its own name at the end', () => {
+    const path =
+      '/Users/sam/.agents/.orca-skill-backups/orca-cli-orchestration-2026-11-23T18-02-11-512Z'
+    const cut = middleTruncatePath(path)
+    expect(cut).toHaveLength(44)
+    expect(cut.endsWith('2026-11-23T18-02-11-512Z')).toBe(true)
+    expect(middleTruncatePath('/short/path')).toBe('/short/path')
   })
 })
