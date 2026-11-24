@@ -18,7 +18,12 @@ function status(
     scope: 'global',
     skills: [{ name: 'orca-cli', status: 'ran', ops }, ...others]
   }
-  const state = { kind: 'done' as const, result, summary: summarizeBundledSkillOutcomes(result) }
+  const state = {
+    kind: 'done' as const,
+    result,
+    summary: summarizeBundledSkillOutcomes(result),
+    homeDirectory: '/Users/sam'
+  }
   return (
     <BundledSkillInstallStatus
       install={{ state, retry: () => {} }}
