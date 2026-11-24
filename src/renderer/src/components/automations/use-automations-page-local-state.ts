@@ -83,6 +83,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     null
   )
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null)
+  const [awaitingHistorySelection, setAwaitingHistorySelection] = useState(false)
   const [selectedExternalKey, setSelectedExternalKey] = useState<string | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const selectedExternalKeyRef = useRef<string | null>(null)
@@ -92,6 +93,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
 
   const selectAutomationId = useCallback(
     (automationId: string | null): void => {
+      setAwaitingHistorySelection(false)
       setRunHistoryAcquisitionToken((token) => token + 1)
       setSelectedAutomationRunPageId(null)
       setSelectedRowKey(null)
@@ -220,6 +222,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     selectedExternalKey,
     setSelectedExternalKey,
     isDetailOpen,
+    awaitingHistorySelection,
+    setAwaitingHistorySelection,
     setIsDetailOpen,
     selectedExternalKeyRef,
     selectAutomationId,

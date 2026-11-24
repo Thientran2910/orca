@@ -40,7 +40,10 @@ export function useAutomationsPageListState({
   store,
   local
 }: {
-  store: Pick<AutomationsPageStoreState, 'repoMap' | 'worktreeMap' | 'selectedId' | 'setSelectedId'>
+  store: Pick<
+    AutomationsPageStoreState,
+    'repoMap' | 'worktreeMap' | 'selectedId' | 'setSelectedId' | 'pendingAutomationRunNavigation'
+  >
   local: Pick<
     AutomationsPageLocalState,
     | 'automations'
@@ -56,6 +59,7 @@ export function useAutomationsPageListState({
     | 'setSelectedAutomationRunPageId'
     | 'setSelectedRowKey'
     | 'setRunHistoryAcquisitionToken'
+    | 'setAwaitingHistorySelection'
   >
 }) {
   const intlLocale = useIntlLocale()
@@ -73,7 +77,8 @@ export function useAutomationsPageListState({
     selectExternalKey,
     setSelectedAutomationRunPageId,
     setSelectedRowKey,
-    setRunHistoryAcquisitionToken
+    setRunHistoryAcquisitionToken,
+    setAwaitingHistorySelection
   } = local
   const hostCatalog = useAutomationHostCatalog({ failedAuthorityKeys })
   const externalScopeEntries = useMemo(
@@ -99,8 +104,11 @@ export function useAutomationsPageListState({
     [externalAutomationEntries, listFilter]
   )
   const selectAutomationRow = useCallback(
-    (rowKey: string | null): void => {
+    (rowKey: string | null, automatic?: true): void => {
       const row = rowKey === null ? null : visibleRows.find((candidate) => candidate.key === rowKey)
+      if (!automatic) {
+        setAwaitingHistorySelection(false)
+      }
       setRunHistoryAcquisitionToken((token) => token + 1)
       setSelectedAutomationRunPageId(null)
       setSelectedRowKey(row?.key ?? null)
@@ -111,6 +119,7 @@ export function useAutomationsPageListState({
       setSelectedId,
       setSelectedRowKey,
       setRunHistoryAcquisitionToken,
+      setAwaitingHistorySelection,
       visibleRows
     ]
   )
@@ -146,6 +155,7 @@ export function useAutomationsPageListState({
     worktreeMap,
     selectedRowKey: selectedRow?.key ?? null,
     selectedExternalKey,
+    alignSelection: !store.pendingAutomationRunNavigation?.ownerKey,
     selectAutomationRow,
     selectExternalKey
   })

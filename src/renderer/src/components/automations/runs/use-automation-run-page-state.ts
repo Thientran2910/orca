@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { workspaceCatalogConfirmsAbsence } from '@/store/workspaces/catalog/workspace-catalog-absence'
 import {
   getAutomationHostTargetKey,
   getAutomationListedTargetFromHostId
@@ -12,7 +11,7 @@ import {
   reportReplacedAutomationRunOwner,
   resolveAutomationRunLinkRow
 } from './automation-run-link-row'
-import { getAutomationRunDetailsWorkspaceName } from './automation-run-workspace-display'
+import { useAutomationRunWorkspaceDetails } from './use-automation-run-workspace-details'
 import type { AutomationsPageListState } from '../listing/use-automations-page-list-state'
 import type { AutomationsPageLocalState } from '../use-automations-page-local-state'
 import type { AutomationsPageSetupState } from '../authoring/use-automations-page-setup-state'
@@ -49,6 +48,8 @@ export function useAutomationRunPageState({
     | 'setRunNotFound'
     | 'isDetailOpen'
     | 'setIsDetailOpen'
+    | 'awaitingHistorySelection'
+    | 'setAwaitingHistorySelection'
   >
   list: AutomationsPageListState
   setup: Pick<
@@ -78,7 +79,9 @@ export function useAutomationRunPageState({
     setRunPageOrigin,
     setRunNotFound,
     isDetailOpen,
-    setIsDetailOpen
+    setIsDetailOpen,
+    awaitingHistorySelection,
+    setAwaitingHistorySelection
   } = local
   const {
     selected,
@@ -178,6 +181,11 @@ export function useAutomationRunPageState({
     )
     if (!pendingRow) {
       if (ownerReplaced) {
+        // Keep the link live until history acquisition has observed this block.
+        if (!awaitingHistorySelection) {
+          setAwaitingHistorySelection(true)
+          return
+        }
         setPendingAutomationRunNavigation(null)
         setSelectedAutomationRunPageId(null)
         setPageView('automations')
@@ -193,6 +201,9 @@ export function useAutomationRunPageState({
       selectAutomationRow(pendingRow.key)
       setIsDetailOpen(true)
       return
+    }
+    if (pending.ownerKey) {
+      setAwaitingHistorySelection(false)
     }
     if (!pending.runId) {
       setIsDetailOpen(true)
@@ -237,6 +248,7 @@ export function useAutomationRunPageState({
   }, [
     automations,
     automationHostTargetKey,
+    awaitingHistorySelection,
     isLoading,
     hostCatalog,
     selectAutomationRow,
@@ -252,6 +264,7 @@ export function useAutomationRunPageState({
     selectedRunsReady,
     selectedRunsNotice,
     setActivePaneTab,
+    setAwaitingHistorySelection,
     setIsDetailOpen,
     setPendingAutomationRunNavigation,
     setPageView,
@@ -262,35 +275,11 @@ export function useAutomationRunPageState({
     t
   ])
 
-  const selectedRunTarget = selectedAutomationRunPage
-    ? list.runTargetFor(selectedAutomationRunPage)
-    : null
-  const viewState = selectedRunTarget?.viewState
-  const workspaceId = selectedAutomationRunPage?.workspaceId
-  const catalogHostId = selectedRunTarget?.workspaceCatalogHostId
-  const workspaceRemoved = useAppStore((state) =>
-    Boolean(
-      workspaceId &&
-      catalogHostId &&
-      !selectedRunTarget?.worktree &&
-      !viewState?.canOpen &&
-      workspaceCatalogConfirmsAbsence(state, workspaceId, catalogHostId)
-    )
+  const { name, actionLabel } = useAutomationRunWorkspaceDetails(
+    selectedAutomationRunPage,
+    list.runTargetFor,
+    t
   )
-  const selectedAutomationRunPageWorkspaceActionLabel = viewState?.canOpen
-    ? viewState.actionLabel
-    : null
-  const selectedAutomationRunPageWorkspaceName = selectedAutomationRunPage
-    ? getAutomationRunDetailsWorkspaceName(
-        {
-          run: selectedAutomationRunPage,
-          worktree: selectedRunTarget?.worktree ?? null,
-          actionLabel: selectedAutomationRunPageWorkspaceActionLabel,
-          workspaceRemoved
-        },
-        t
-      )
-    : null
   const canRerunSelectedAutomationRunPage =
     selectedAutomationRunPage !== null &&
     canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
@@ -298,8 +287,8 @@ export function useAutomationRunPageState({
     selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
 
   return {
-    selectedAutomationRunPageWorkspaceName,
-    selectedAutomationRunPageWorkspaceActionLabel,
+    selectedAutomationRunPageWorkspaceName: name,
+    selectedAutomationRunPageWorkspaceActionLabel: actionLabel,
     canRerunSelectedAutomationRunPage,
     isSelectedAutomationRunPageRerunPending
   }

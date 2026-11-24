@@ -1,5 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { bytesToHex } from '@noble/hashes/utils'
+import type { AgentChatPermissionChoice } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import type { AutomationBotTarget } from '../../automation-bot-target'
 import type { Bot } from '../../bot-types'
 import { botAutomationSetup } from '../../bots/bot-agent-setup'
@@ -11,6 +12,11 @@ export type AutomationModelRecoveryInput = {
   model: string
 }
 
+export type AutomationModelRecoverySelection = {
+  model: string | null
+  permission: AgentChatPermissionChoice | null
+}
+
 export type AutomationModelRecoveryResult =
   | { status: 'changed' | 'busy' | 'unconfirmed' | 'unsupported' }
   | { status: 'saved'; rerun: 'skipped' | 'unconfirmed' }
@@ -20,7 +26,8 @@ export type AutomationModelRecoveryResult =
 export function automationModelRecoveryTarget(
   target: AutomationBotTarget,
   bot: Pick<Bot, 'agent' | 'launch' | 'folderWorkspaceId' | 'permissionMode'>,
-  folderPath: string
+  folderPath: string,
+  permission: AutomationModelRecoverySelection['permission']
 ): string {
   const { agent, launch } = botAutomationSetup(target, bot)
   const { botId, runsIn, resultsTo, letBotReact } = target
@@ -41,6 +48,7 @@ export function automationModelRecoveryTarget(
         bot.folderWorkspaceId,
         folderPath,
         bot.permissionMode,
+        permission,
         agent,
         Object.keys(options)
           .sort()

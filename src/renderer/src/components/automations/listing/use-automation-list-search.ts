@@ -41,6 +41,7 @@ export function useAutomationListSearch({
   worktreeMap,
   selectedRowKey,
   selectedExternalKey,
+  alignSelection,
   selectAutomationRow,
   selectExternalKey
 }: {
@@ -52,7 +53,8 @@ export function useAutomationListSearch({
   /** The row currently on screen, not the bare id: two hosts can hold that id. */
   selectedRowKey: string | null
   selectedExternalKey: string | null
-  selectAutomationRow: (rowKey: string | null) => void
+  alignSelection: boolean
+  selectAutomationRow: (rowKey: string | null, automatic?: true) => void
   selectExternalKey: (externalKey: string | null) => void
 }): {
   isListSearchQueryTooLarge: boolean
@@ -150,7 +152,7 @@ export function useAutomationListSearch({
 
   // Align detail/highlight with the first visible match when search hides selection; no matches preserve detail.
   useEffect(() => {
-    if (activeListSearchQuery === null) {
+    if (!alignSelection || activeListSearchQuery === null) {
       return
     }
     const localVisible =
@@ -169,7 +171,7 @@ export function useAutomationListSearch({
         selectExternalKey(null)
       }
       if (selectedRowKey !== firstLocal.key) {
-        selectAutomationRow(firstLocal.key)
+        selectAutomationRow(firstLocal.key, true)
       }
       return
     }
@@ -179,6 +181,7 @@ export function useAutomationListSearch({
     }
   }, [
     activeListSearchQuery,
+    alignSelection,
     filteredRows,
     filteredExternalAutomationEntries,
     selectAutomationRow,

@@ -1,7 +1,9 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
+import { newChatPermissionModeForSettings } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { automationModelRecoveryTarget } from '../../../../../shared/automations/history/automation-model-recovery'
+import { isFailedAutomationRunModel } from '../../../../../shared/automations/history/automation-run-model-failure'
 import { ownerKey } from '../../../../../shared/automations/ownership/automation-owner-key'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { automationRowHostId } from '../automations-page-navigation'
@@ -81,27 +83,35 @@ export function useAutomationRunModelActions(
       canRerun: true
     })
   const unsupported = useAutomationModelRecoveryUnsupported(eligible ? bot?.hostId : undefined)
-  const defaultsOwner =
-    activeRun &&
-    eligible &&
-    !unsupported &&
-    folderPath &&
-    !eligible.currentModel &&
-    availability?.kind === 'owned'
+  const lookupOwner =
+    activeRun && eligible && !unsupported && folderPath && availability?.kind === 'owned'
       ? availability.owner
       : null
-  const defaultModel = useAutomationRecoveryModel(
-    defaultsOwner,
+  const lookupSettings = lookupOwner?.authority.kind === 'desktop' ? store.settings : null
+  const lookupKey = JSON.stringify([
+    eligible?.agent,
+    eligible?.currentModel,
+    bot?.permissionMode,
+    eligible && lookupSettings?.agentLaunchChoices?.[eligible.agent]?.model,
+    eligible && newChatPermissionModeForSettings(eligible.agent, lookupSettings)
+  ])
+  const { read, currentSelection } = useAutomationRecoveryModel(
+    lookupOwner,
     selected?.id,
     activeRun,
-    defaultsOwner?.authority.kind === 'desktop' ? store.settings?.agentLaunchChoices : undefined
+    lookupKey
   )
 
   const onPickModel = async (model: AutomationRunModelOption): Promise<void> => {
     const target = selected?.bot
+    const selection = read.status === 'ready' ? read.selection : undefined
     if (
       !selectedRow ||
       !selectedAutomationRunPage ||
+      !selection ||
+      currentSelection() !== selection ||
+      selection.model === model.id ||
+      isFailedAutomationRunModel(model.id, selectedAutomationRunPage.errorParams) ||
       !target ||
       !bot ||
       !folderPath ||
@@ -114,7 +124,7 @@ export function useAutomationRunModelActions(
     const outcome = await recoverOwnedAutomationModel(availability, {
       id: automationId,
       runId: selectedAutomationRunPage.id,
-      expectedTarget: automationModelRecoveryTarget(target, bot, folderPath),
+      expectedTarget: automationModelRecoveryTarget(target, bot, folderPath, selection.permission),
       model: model.id
     })
     if (outcome.status === 'uncaptured') {
@@ -165,7 +175,8 @@ export function useAutomationRunModelActions(
 
   return {
     bot: folderPath ? bot : null,
-    onPickModel: defaultsOwner && defaultModel === undefined ? undefined : onPickModel,
-    defaultModel: defaultModel ?? undefined
+    onPickModel,
+    defaultModel: 'selection' in read ? read.selection.model : undefined,
+    modelRead: read.status
   }
 }

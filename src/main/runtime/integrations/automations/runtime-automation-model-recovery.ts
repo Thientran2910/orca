@@ -2,14 +2,21 @@ import type { AutomationBotTarget } from '../../../../shared/automations/automat
 import {
   automationModelRecoveryTarget,
   type AutomationModelRecoveryInput,
-  type AutomationModelRecoveryResult
+  type AutomationModelRecoveryResult,
+  type AutomationModelRecoverySelection
 } from '../../../../shared/automations/history/automation-model-recovery'
+import { newChatPermissionModeForSettings } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { Bot } from '../../../../shared/bot-types'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { isFailedAutomationRunModel } from '../../../../shared/automations/history/automation-run-model-failure'
 import { BotLaunchSchema } from '../../../../shared/bots/bot-launch'
 import { botAutomationSetup } from '../../../../shared/bots/bot-agent-setup'
 import { resolveBotAutomationRunTarget } from '../../../automations/bot-run-target'
-import { botBackgroundStartOptions, type BotLaunchSettings } from '../../../bots/bot-start-options'
+import {
+  botBackgroundStartOptions,
+  botStartPermission,
+  type BotLaunchSettings
+} from '../../../bots/bot-start-options'
 import type { AutomationService } from '../../../automations/automation-service'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -19,16 +26,31 @@ type RecoveryStore = Pick<
   'getFolderWorkspaces' | 'getBots' | 'updateAutomation' | 'flushPendingOrThrowAsync'
 > & { getSettings: () => NonNullable<BotLaunchSettings> & { botsEnabled?: boolean } }
 
-export function readAutomationRecoveryModel(
+function automationRecoveryPermission(
+  settings: BotLaunchSettings,
+  bot: Pick<Bot, 'agent' | 'permissionMode'>
+): AutomationModelRecoverySelection['permission'] {
+  return botStartPermission(bot) ?? newChatPermissionModeForSettings(bot.agent, settings)
+}
+
+export function readAutomationRecoverySelection(
   store: Pick<RecoveryStore, 'getBots' | 'getSettings'>,
   target?: AutomationBotTarget
-): string | null {
+): AutomationModelRecoverySelection | undefined {
   const bot =
     target?.runsIn === 'new' && store.getBots?.().find((entry) => entry.id === target.botId)
-  return bot && target
-    ? (botBackgroundStartOptions(store.getSettings(), botAutomationSetup(target, bot)).model ??
-        null)
-    : null
+  if (!bot || !target) {
+    return undefined
+  }
+  const settings = store.getSettings()
+  const setup = botAutomationSetup(target, bot)
+  return {
+    model: botBackgroundStartOptions(settings, setup).model ?? null,
+    permission: automationRecoveryPermission(settings, {
+      ...setup,
+      permissionMode: bot.permissionMode
+    })
+  }
 }
 
 export async function recoverAutomationModel(
@@ -71,17 +93,18 @@ export async function recoverAutomationModel(
       return { status: 'changed' }
     }
     const resolved = resolve(target)
+    const settings = store.getSettings()
+    if (!resolved.ok || failed.errorParams?.agent !== resolved.bot.agent) {
+      return { status: 'changed' }
+    }
+    const permission = automationRecoveryPermission(settings, resolved.bot)
     if (
-      !resolved.ok ||
-      failed.errorParams?.agent !== resolved.bot.agent ||
-      automationModelRecoveryTarget(target, resolved.bot, resolved.cwd) !== expectedTarget
+      automationModelRecoveryTarget(target, resolved.bot, resolved.cwd, permission) !==
+      expectedTarget
     ) {
       return { status: 'changed' }
     }
-    const { model: effectiveModel, ...options } = botBackgroundStartOptions(
-      store.getSettings(),
-      resolved.bot
-    )
+    const { model: effectiveModel, ...options } = botBackgroundStartOptions(settings, resolved.bot)
     if (effectiveModel === model) {
       return { status: 'changed' }
     }
@@ -94,7 +117,12 @@ export async function recoverAutomationModel(
       ...(keptOptions && Object.keys(keptOptions).length > 0 ? { options: keptOptions } : {})
     })
     const bot = { ...target, agentSetup: { agent: resolved.bot.agent, launch } }
-    const expectedSavedTarget = automationModelRecoveryTarget(bot, resolved.bot, resolved.cwd)
+    const expectedSavedTarget = automationModelRecoveryTarget(
+      bot,
+      resolved.bot,
+      resolved.cwd,
+      permission
+    )
     // Keep the read and write synchronous so the other bot settings come from the same record.
     store.updateAutomation(id, { bot, agentId: resolved.bot.agent }, { expectedOwner })
     try {
@@ -111,13 +139,19 @@ export async function recoverAutomationModel(
         return { status: 'saved', rerun: 'skipped' }
       }
       const runTarget = resolve(current)
+      const currentSettings = store.getSettings()
       if (
         !runTarget.ok ||
-        automationModelRecoveryTarget(current, runTarget.bot, runTarget.cwd) !== expectedSavedTarget
+        automationModelRecoveryTarget(
+          current,
+          runTarget.bot,
+          runTarget.cwd,
+          automationRecoveryPermission(currentSettings, runTarget.bot)
+        ) !== expectedSavedTarget
       ) {
         return { status: 'saved', rerun: 'skipped' }
       }
-      newerModel = botBackgroundStartOptions(store.getSettings(), runTarget.bot).model !== model
+      newerModel = botBackgroundStartOptions(currentSettings, runTarget.bot).model !== model
     } catch {
       return { status: 'saved', rerun: 'skipped' }
     }

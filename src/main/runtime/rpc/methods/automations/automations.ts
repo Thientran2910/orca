@@ -15,7 +15,7 @@ import {
   AutomationRecoverModel,
   AutomationShow
 } from '../../../../../shared/rpc-contract/automations/automation-model-recovery-param'
-import { readAutomationRecoveryModel } from '../../../integrations/automations/runtime-automation-model-recovery'
+import { readAutomationRecoverySelection } from '../../../integrations/automations/runtime-automation-model-recovery'
 import { recordAutomationSavedCard } from '../../../automation-saved-card'
 import { deleteAutomationRecordingCancelledWait } from '../../../../bots/bot-wait-cancel'
 import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
@@ -110,7 +110,12 @@ export const AUTOMATION_METHODS = [
         automation,
         ...(owner ? { owner } : {}),
         ...(params.modelRecovery
-          ? { recoveryModel: readAutomationRecoveryModel(runtime.requireStore(), automation.bot) }
+          ? {
+              recoverySelection: readAutomationRecoverySelection(
+                runtime.requireStore(),
+                automation.bot
+              )
+            }
           : {})
       }
     }

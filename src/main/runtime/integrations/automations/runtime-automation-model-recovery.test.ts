@@ -9,12 +9,26 @@ import {
   type AutomationModelRecoveryInput
 } from '../../../../shared/automations/history/automation-model-recovery'
 import { automationRunModelUnavailable } from '../../../../shared/automations/history/automation-run-model-failure'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  type AgentChatPermissionMode
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import {
+  seededPermissionMode,
+  structuredLaunchSeedOptions
+} from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { FolderWorkspacePersistenceOperations } from '../../../persistence/restoring-sessions/folder-workspace-operations'
-import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { updateSettings } from '../../../persistence/applying-settings/settings-update'
 import {
-  readAutomationRecoveryModel,
+  createAutomationRun,
+  listAutomationRuns
+} from '../../../persistence/scheduling-automations/automation-run-operations'
+import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { botStartPermission } from '../../../bots/bot-start-options'
+import {
+  readAutomationRecoverySelection,
   recoverAutomationModel
 } from './runtime-automation-model-recovery'
 
@@ -26,6 +40,8 @@ type RecoveryOptions = {
   settingsModel?: string
   input?: Partial<AutomationModelRecoveryInput>
   refuseRerun?: boolean
+  inheritPermission?: true
+  permissionBeforeHandler?: AgentChatPermissionMode
 }
 
 function beginRecovery(options: RecoveryOptions = {}) {
@@ -95,23 +111,55 @@ function beginRecovery(options: RecoveryOptions = {}) {
   }
   const persisted = Promise.withResolvers<void>()
   const pending = new Set<string>()
-  const bot = makeTestBot(
-    options.settingsModel ? {} : { launch: { model: 'old-model', options: { effort: 'high' } } }
+  const bot = makeTestBot({
+    ...(options.inheritPermission ? { permissionMode: undefined } : {}),
+    ...(options.settingsModel
+      ? {}
+      : { launch: { model: 'old-model', options: { effort: 'high' } } })
+  })
+  const state = {
+    ...getDefaultPersistedState('/fixture'),
+    folderWorkspaces: [folder],
+    automationRuns: [failed]
+  }
+  state.settings = {
+    ...state.settings,
+    botsEnabled: true,
+    ...(options.settingsModel
+      ? { agentLaunchChoices: { codex: { model: options.settingsModel } } }
+      : {})
+  }
+  const writePermission = (permission: AgentChatPermissionMode) =>
+    updateSettings(
+      {
+        state,
+        bumpLocalWorktreeScanGeneration() {},
+        removeRetainedBlob: () => undefined,
+        scheduleSave() {},
+        notifySettingsChanged() {}
+      },
+      { agentPermissionDefault: permission }
+    )
+  writePermission('ask')
+  const getSettings = () => state.settings
+  const readSelection = () =>
+    readAutomationRecoverySelection({ getSettings, getBots: () => [bot] }, automation.bot)
+  const expectedTarget = automationModelRecoveryTarget(
+    automation.bot!,
+    bot,
+    folder.folderPath,
+    readSelection()?.permission ?? null
   )
-  const expectedTarget = automationModelRecoveryTarget(automation.bot!, bot, folder.folderPath)
   const folders = new FolderWorkspacePersistenceOperations({
-    state: { ...getDefaultPersistedState('/fixture'), folderWorkspaces: [folder] },
+    state,
     scheduleSave() {},
     removeWorkspaceLineageForRemovedFolder() {},
     pruneMobileClientTabSelections() {},
     hydrateRepo: (repo) => repo
   })
-  const getSettings = () => ({
-    botsEnabled: true,
-    ...(options.settingsModel
-      ? { agentLaunchChoices: { codex: { model: options.settingsModel } } }
-      : {})
-  })
+  if (options.permissionBeforeHandler) {
+    writePermission(options.permissionBeforeHandler)
+  }
   if (options.folderMoveBeforeHandler) {
     folders.updateFolderWorkspace(folder.id, { folderPath: options.folderMoveBeforeHandler })
   }
@@ -124,7 +172,11 @@ function beginRecovery(options: RecoveryOptions = {}) {
   const recover = () =>
     recoverAutomationModel(
       pending,
-      { assertOwner: () => {}, show: () => automation, listRuns: () => [failed] },
+      {
+        assertOwner: () => {},
+        show: () => automation,
+        listRuns: (id) => listAutomationRuns(state, id)
+      },
       {
         getSettings,
         getBots: () => [bot],
@@ -135,10 +187,18 @@ function beginRecovery(options: RecoveryOptions = {}) {
       },
       {
         runNow: async () => {
+          const run = createAutomationRun(
+            { state, flush() {}, recordManualRun() {}, getWorkspaceDisplayName: () => null },
+            automation,
+            Date.now(),
+            'manual',
+            undefined,
+            'queued'
+          )
           if (options.refuseRerun) {
             throw new Error('Queue acknowledgement lost')
           }
-          return { ...failed, id: 'queued', status: 'pending' }
+          return run
         }
       },
       { id: 'automation', runId: 'failed', expectedTarget, model: 'replacement', ...options.input }
@@ -147,8 +207,15 @@ function beginRecovery(options: RecoveryOptions = {}) {
   return {
     recovery: recover(),
     recover,
-    readModel: () =>
-      readAutomationRecoveryModel({ getSettings, getBots: () => [bot] }, automation.bot),
+    readSelection,
+    queued: () =>
+      listAutomationRuns(state, automation.id).filter((run) => run.status === 'pending'),
+    createPermission: () =>
+      botStartPermission(bot) ??
+      seededPermissionMode(structuredLaunchSeedOptions(state.settings, bot.agent))?.[
+        AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+      ],
+    writePermission,
     moveFolder: (path: string) => {
       folders.updateFolderWorkspace(folder.id, { folderPath: path })
       persisted.resolve()
@@ -182,7 +249,7 @@ it('shows the owner Settings model, refuses the same choice and queues a differe
     settingsModel: 'settings-model',
     input: { model: 'settings-model' }
   })
-  expect(same.readModel()).toBe('settings-model')
+  expect(same.readSelection()).toEqual({ model: 'settings-model', permission: 'ask' })
   same.acceptSave()
   await expect(same.recovery).resolves.toEqual({ status: 'changed' })
   expect(same.target?.agentSetup).toBeUndefined()
@@ -190,7 +257,34 @@ it('shows the owner Settings model, refuses the same choice and queues a differe
   const different = beginRecovery({ settingsModel: 'settings-model' })
   different.acceptSave()
   await expect(different.recovery).resolves.toEqual({ status: 'queued', runId: 'queued' })
-  expect(different.readModel()).toBe('replacement')
+  expect(different.readSelection()).toEqual({ model: 'replacement', permission: 'ask' })
+})
+
+it('fences changed inherited permission before and after save, but honors a supported bot override', async () => {
+  const before = beginRecovery({ inheritPermission: true, permissionBeforeHandler: 'full-access' })
+  before.acceptSave()
+  await expect(before.recovery).resolves.toEqual({ status: 'changed' })
+  expect(before.target?.agentSetup).toBeUndefined()
+  expect(before.queued()).toHaveLength(0)
+
+  const during = beginRecovery({ inheritPermission: true })
+  expect(during.readSelection()?.permission).toBe('ask')
+  expect(during.createPermission()).toBe('ask')
+  during.writePermission('full-access')
+  expect(during.readSelection()?.permission).toBe('full-access')
+  expect(during.createPermission()).toBe('full-access')
+  during.acceptSave()
+  await expect(during.recovery).resolves.toEqual({ status: 'saved', rerun: 'skipped' })
+  expect(during.target?.agentSetup?.launch?.model).toBe('replacement')
+  expect(during.queued()).toHaveLength(0)
+
+  const explicit = beginRecovery()
+  explicit.writePermission('full-access')
+  expect(explicit.readSelection()?.permission).toBe('ask')
+  expect(explicit.createPermission()).toBe('ask')
+  explicit.acceptSave()
+  await expect(explicit.recovery).resolves.toEqual({ status: 'queued', runId: 'queued' })
+  expect(explicit.queued().map((run) => run.id)).toEqual(['queued'])
 })
 
 it('preserves an intervening destination edit and skips delivery after saving the model', async () => {

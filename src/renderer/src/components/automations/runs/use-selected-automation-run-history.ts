@@ -39,6 +39,7 @@ export type SelectedAutomationRunNavigation = {
   runId?: string | null
   hostId?: string | null
   ownerKey?: string
+  rowKey?: string
 } | null
 
 export type SelectedAutomationRunHistoryOutcome = {
@@ -67,6 +68,7 @@ export type SelectedAutomationRunHistoryInput = {
   /** The row's own host, used only when no owner was captured for it. */
   legacyTarget: (row: AutomationListRow) => AutomationHostTarget | null
   navigation: SelectedAutomationRunNavigation
+  suspended?: boolean
   /** Changing this re-asks the host; it is how a failed read offers Retry. */
   reloadToken: number
   acquisitionToken?: number
@@ -100,6 +102,19 @@ function acquireSelectedHistory(
 ): HistoryAcquisition | null {
   const selected = input.selected
   const navigationOwner = input.navigation?.ownerKey
+  if (
+    input.suspended ||
+    (navigationOwner &&
+      (!selected ||
+        input.navigation?.automationId !== selected.automation.id ||
+        (input.navigation.rowKey !== undefined && input.navigation.rowKey !== selected.key) ||
+        navigationOwner !==
+          capturedAutomationOwnerKey(
+            capturedAutomationOwner(input.context.capturedOwners, selected.key)
+          )))
+  ) {
+    return null
+  }
   const previousOwner = previous && capturedAutomationOwnerKey(previous.captured)
   let request = previous
   if (
@@ -165,6 +180,16 @@ function historyNavigation(
     : null
 }
 
+function canReadHistory(
+  navigation: SelectedAutomationRunNavigation,
+  owner: string | null
+): boolean {
+  const pending = useAppStore.getState().pendingAutomationRunNavigation
+  return navigation?.ownerKey
+    ? pending === navigation && navigation.ownerKey === owner
+    : !pending?.ownerKey
+}
+
 export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHistoryInput): void {
   const acquired = useRef<HistoryAcquisition | null>(null)
   const request = acquireSelectedHistory(input, acquired.current)
@@ -199,6 +224,9 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     const rowKey = selected.key
     const owner = capturedAutomationOwnerKey(captured)
     const read = (): void => {
+      if (!canReadHistory(navigation, owner)) {
+        return
+      }
       const currentRequestId = ++requestId
       settled.current = null
       void dispatchAutomationRunHistory(
@@ -212,7 +240,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
           ),
         rowAuthority
       ).then((result) => {
-        if (cancelled || requestId !== currentRequestId) {
+        if (cancelled || requestId !== currentRequestId || !canReadHistory(navigation, owner)) {
           return
         }
         settled.current = { request, reloadToken }

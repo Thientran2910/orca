@@ -68,6 +68,13 @@ export function useAutomationsPageRefresh({
   } = local
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
+  const pendingTargetKey = pendingAutomationRunNavigation
+    ? getAutomationHostTargetKey(
+        getAutomationListedTargetFromHostId(pendingAutomationRunNavigation.hostId, {
+          runtimeEnvironments
+        })
+      )
+    : null
   const reloadExternalManagers = scopedExternal.reload
   // Only listings the pending link itself started count, so a failed focus refresh never drops it.
   const [pendingListingFailures, setPendingListingFailures] = useState<PendingListingFailures>({
@@ -161,11 +168,6 @@ export function useAutomationsPageRefresh({
     if (!pendingAutomationRunNavigation || isLoading) {
       return
     }
-    const pendingTargetKey = getAutomationHostTargetKey(
-      getAutomationListedTargetFromHostId(pendingAutomationRunNavigation.hostId, {
-        runtimeEnvironments
-      })
-    )
     if (automationHostTargetKey === pendingTargetKey) {
       return
     }
@@ -195,9 +197,9 @@ export function useAutomationsPageRefresh({
     automationHostTargetKey,
     isLoading,
     pendingAutomationRunNavigation,
+    pendingTargetKey,
     pendingListingFailures,
     refresh,
-    runtimeEnvironments,
     setPageView
   ])
   useSelectedAutomationRunHistory({
@@ -207,6 +209,9 @@ export function useAutomationsPageRefresh({
     context: destination.automationDispatchContext,
     legacyTarget: automationHostTargetFor,
     navigation: pendingAutomationRunNavigation,
+    suspended: pendingAutomationRunNavigation?.ownerKey
+      ? isLoading || automationHostTargetKey !== pendingTargetKey
+      : local.awaitingHistorySelection && !pendingAutomationRunNavigation,
     reloadToken: runHistoryReloadToken,
     acquisitionToken: local.runHistoryAcquisitionToken,
     onSettled: local.setSelectedAutomationRuns

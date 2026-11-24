@@ -19,7 +19,6 @@ import type { SetupTrustMismatch } from '../../../../../shared/worktree/create-t
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import {
   AUTOMATION_EDITOR_SECTION_LABEL_CLASS,
-  AutomationRunErrorNotice,
   AutomationRunSetupSkippedNotice,
   formatAutomationDateTime,
   formatAutomationDateTimeWithRelative
@@ -36,12 +35,10 @@ import {
 } from './automation-run-identity-label'
 import { AutomationsPageFrame, AutomationsPageTitle } from '../AutomationsPageFrame'
 import type { Bot } from '../../../../../shared/bot-types'
-import {
-  automationRunModelFix,
-  useAutomationModelRecoveryUnsupported,
-  type AutomationRunModelOption
-} from './automation-run-model-fix'
+import type { AutomationRunModelOption } from './automation-run-model-fix'
+import { AutomationRunFailureNotice } from './AutomationRunFailureNotice'
 import { AutomationRunModelPicker } from './AutomationRunModelPicker'
+import type { AutomationRecoveryModelRead } from './use-automation-recovery-model'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function AutomationRunDetailsPage({
@@ -59,6 +56,7 @@ export function AutomationRunDetailsPage({
   onRerun,
   bot = null,
   defaultModel,
+  modelRead = 'ready',
   onEdit,
   onPickModel,
   modelPicker: ModelPicker = AutomationRunModelPicker,
@@ -83,7 +81,8 @@ export function AutomationRunDetailsPage({
   onRerun: () => void
   /** The bot a bot automation runs as; its host lists the models a failed model can be swapped for. */
   bot?: Pick<Bot, 'agent' | 'launch' | 'hostId' | 'folderWorkspaceId'> | null
-  defaultModel?: string
+  defaultModel?: string | null
+  modelRead?: AutomationRecoveryModelRead['status']
   /** Opens the automation's editor. */
   onEdit?: () => void
   /** Saves `model` to the automation, then reruns it; settles once both are done or one failed. */
@@ -129,53 +128,6 @@ export function AutomationRunDetailsPage({
   const { newer, older } = getAutomationRunNeighbors(runs, listedRun.id)
   const needsCredentials = run.status === 'skipped_needs_interactive_auth'
   const [isModelFixPending, setIsModelFixPending] = useState(false)
-  const modelFix = onPickModel
-    ? automationRunModelFix({ run, automation, bot, canRerun, defaultModel })
-    : null
-  const recoveryUnsupported = useAutomationModelRecoveryUnsupported(
-    modelFix ? bot?.hostId : undefined
-  )
-  const compactModelError =
-    !recoveryUnsupported && modelFix?.modelChanged
-      ? t('automations.runModelFix.modelChanged', 'Model changed.')
-      : t('automations.runModelFix.modelUnavailable', 'Model unavailable.')
-  const renderFailureNotice = (action?: React.ReactNode) => (
-    <AutomationRunErrorNotice
-      action={action}
-      compactError={action || recoveryUnsupported ? compactModelError : undefined}
-      busy={isModelFixPending}
-      label={t('auto.components.automations.runIdentity.runFailed', 'Run failed.')}
-      error={
-        action && modelFix?.currentModelFailed
-          ? t('automations.runModelFix.errorWithPicker', "{{agent}} couldn't use this model.", {
-              agent: getAgentLabel(modelFix.agent)
-            })
-          : (errorText ??
-            t(
-              'auto.components.automations.runIdentity.noFailureReason',
-              'This run did not start, and no reason was recorded.'
-            ))
-      }
-    />
-  )
-  const failureNotice =
-    modelFix && bot && onPickModel && !recoveryUnsupported ? (
-      <ModelPicker
-        bot={bot}
-        agent={modelFix.agent}
-        currentModel={modelFix.currentModel}
-        failureParams={modelFix.failureParams}
-        disabled={isModelFixPending || isRerunPending}
-        renderNotice={renderFailureNotice}
-        onPick={(model) => {
-          setIsModelFixPending(true)
-          void onPickModel(model).finally(() => setIsModelFixPending(false))
-        }}
-      />
-    ) : (
-      renderFailureNotice()
-    )
-
   const stepRef = useRef({ newer, older, onSelectRun })
   useEffect(() => {
     stepRef.current = { newer, older, onSelectRun }
@@ -367,7 +319,26 @@ export function AutomationRunDetailsPage({
             ) : null}
           </div>
         ) : failed ? (
-          failureNotice
+          <AutomationRunFailureNotice
+            run={run}
+            automation={automation}
+            bot={bot}
+            defaultModel={defaultModel}
+            modelRead={modelRead}
+            canRerun={canRerun}
+            isRerunPending={isRerunPending}
+            isModelFixPending={isModelFixPending}
+            errorText={errorText}
+            modelPicker={ModelPicker}
+            onPickModel={
+              onPickModel
+                ? (model) => {
+                    setIsModelFixPending(true)
+                    void onPickModel(model).finally(() => setIsModelFixPending(false))
+                  }
+                : undefined
+            }
+          />
         ) : null}
 
         <AutomationRunToolbar

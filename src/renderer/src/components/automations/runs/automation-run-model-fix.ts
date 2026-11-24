@@ -42,7 +42,7 @@ export function automationRunModelFix({
   automation: Pick<Automation, 'bot'> | null
   bot: Pick<Bot, 'agent' | 'launch'> | null
   canRerun: boolean
-  defaultModel?: string
+  defaultModel?: string | null
 }) {
   const target = automation?.bot
   if (
@@ -59,7 +59,8 @@ export function automationRunModelFix({
   if (run.errorParams?.agent !== setup.agent) {
     return null
   }
-  const currentModel = setup.launch?.model ?? defaultModel
+  const currentModel =
+    defaultModel === undefined ? setup.launch?.model : (defaultModel ?? undefined)
   const currentModelFailed =
     currentModel !== undefined && isFailedAutomationRunModel(currentModel, run.errorParams)
   return {
